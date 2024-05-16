@@ -8,7 +8,6 @@ from shapely.geometry import LineString
 import cartopy.feature as cfeature
 
 import mplcursors
-# from sklearn.metrics import mean_squared_error
 from math import sqrt
 
 
@@ -33,9 +32,6 @@ path ='/home/dvega/anaconda3/work/SWOT/'
 
 folder_path = (f'{path}swot_basic_1day/003_016_pass/')  # Define SWOT passes folders
                 
-
-plot_folder_path = f'{path}swot_basic_1day/plots_strategy_1/'
-
 data_tg = np.load(f'{path}mareografos/TGresiduals1d_2023_European_Seas_SWOT_FSP.npz')
 names_tg = pd.read_csv(f'{path}mareografos/GLOBAL_TGstations_CMEMS_SWOT_FSP_Feb2024', header=None)
 # Change format of names
@@ -120,7 +116,7 @@ data_arrays = ordered_data_arrays
 strategy = 0
 
 # Radius in km for averaging nearby points
-dmedia = 10  # km
+dmedia = 50  # km
 
 # List to store all SWOT time series (one list per tide gauge)
 all_swot_timeseries = []
@@ -150,7 +146,7 @@ for filename in nc_files:
     ssh = ssh[valid_indices]
 
     # Loop through each tide gauge location
-    for idx, (gauge_lon, gauge_lat) in enumerate(zip(lon_tg, lat_tg)):
+    for idx, (gauge_lon, gauge_lat) in enumerate(zip(ordered_lon, ordered_lat)):
 
         if strategy == 0:  # ------------------------------------------------------------------------------------------
             # Calculate distance for each data point
@@ -169,7 +165,9 @@ for filename in nc_files:
                 # Store the latitudes and longitudes of SWOT within the radius
                 swot_lat_within_radius = lat[in_radius]
                 swot_lon_within_radius = lon[in_radius]
-                # print(f"There is SWOT data within {dmedia} km radius of tide gauge {sorted_names[idx]}")
+
+                # Store closes  distance
+                min_distance_point = distances[in_radius].min()
 
             else:
                 ssh_serie = np.nan  # No data within radius (remains NaN)
@@ -190,7 +188,8 @@ for filename in nc_files:
                 "time": time_serie,
                 "n_val": n_idx,  # Number of points for the average within the radius
                 "swot_lat_within_radius": swot_lat_within_radius,  # Latitudes of SWOT within the radius
-                "swot_lon_within_radius": swot_lon_within_radius   # Longitudes of SWOT within the radius
+                "swot_lon_within_radius": swot_lon_within_radius,   # Longitudes of SWOT within the radius
+                "min_distance": min_distance_point  # Closest distance within the radius
             }
 
         else:  # ----------------------------------------------------------------------------------------------------
@@ -239,6 +238,7 @@ for i in range(0, len(all_swot_timeseries)):  # Loop through each file's data
     ssh_raw = file_data['ssha_raw']  # Raw SSH values within the radius
     swot_lat_within_radius = file_data['swot_lat_within_radius']  # Latitudes of SWOT within the radius
     swot_lon_within_radius = file_data['swot_lon_within_radius']  # Longitudes of SWOT within the radius
+    min_distance = file_data['min_distance']  # Closest distance within the radius
     
     # Append the SSH and time s to the station's time series
     station_time_series.append({'station_name': station_name,
@@ -249,7 +249,8 @@ for i in range(0, len(all_swot_timeseries)):  # Loop through each file's data
                                 'num_swot_points': n_val,
                                 'raw_ssha': ssh_raw,
                                 'swot_lat_within_radius': swot_lat_within_radius,
-                                'swot_lon_within_radius': swot_lon_within_radius})
+                                'swot_lon_within_radius': swot_lon_within_radius,
+                                'min_distance': min_distance})
 
 
 df2 = pd.DataFrame(station_time_series)
@@ -264,6 +265,7 @@ var_SWOT = []
 var_diff = []
 days_used_per_gauge = []
 n_nans_tg = []
+min_distances = []
 
 
 # Convert from Series of ndarrays containing dates to Series of timestamps
@@ -299,7 +301,7 @@ df_tg = pd.concat(df_tg, ignore_index=True).dropna(how='any')
 
 # ---------------- MANAGING COMPARISON BETWEEN TG AND SWO ------------------------------------------------
 
-empty_stations = []  # List to store empty stations
+empty_stations = []  # List to store empty stations indexes
 
 idx_tg = np.arange(len(sorted_names))
 for station in idx_tg:
@@ -307,6 +309,7 @@ for station in idx_tg:
 
         # ssh_swot_station = df[df['station_name'] == sorted_names[station]]
         ssh_swot_station = df[df['station_name'] == sorted_names[station]].copy()  # Corrected warnings
+        print(len(ssh_swot_station))
         if ssh_swot_station.empty:
             empty_stations.append(station)
             print(f"No SWOT data found for station {sorted_names[station]}")
@@ -368,17 +371,41 @@ for station in idx_tg:
             # Num days used
             days_used_per_gauge.append(len(swot_ts))
 
+            # Average min distances
+            min_distances.append(swot_ts['min_distance'].min())
+
             # PLOT SERIES TEMPORALES INCLUYENDO GAPS!
             plt.figure(figsize=(10, 6))
             plt.plot(swot_ts['time'], swot_ts['demean'], label='SWOT data')
             plt.plot(tg_ts['time'], tg_ts['demean'], label='Tide Gauge Data')
-            plt.title(f'Station {sorted_names[station]}')
+            plt.title(f'Station {sorted_names[station]} taking radius of {dmedia} km')
             plt.legend()
             plt.xticks(rotation=20)
             # plt.xlabel('time')
             plt.grid(True, alpha=0.2)
             plt.ylabel('SSHA (cm)')
             plt.tick_params(axis='both', which='major', labelsize=11)
+
+            # PLOT MAP OF DATA OBTAINED FROM EACH GAUGE!
+            lolabox = [1, 8, 35, 45]
+
+            # Your existing code for plotting the map
+            fig, ax = plt.subplots(figsize=(10.5, 11), subplot_kw=dict(projection=ccrs.PlateCarree()))
+
+            # Set the extent to focus on the defined lon-lat box
+            ax.set_extent(lolabox, crs=ccrs.PlateCarree())
+
+            # Add scatter plot for specific locations
+            ax.scatter(tg_ts['longitude'][0], tg_ts['latitude'][0], c='black', marker='o', s=50, transform=ccrs.Geodetic(), label='Tide Gauge')
+            ax.scatter(swot_ts['swot_lon_within_radius'][0], swot_ts['swot_lat_within_radius'][0], c='blue', marker='o', s=50, transform=ccrs.Geodetic(), label='SWOT data')
+
+            # Add coastlines and gridlines
+            ax.coastlines()
+            ax.gridlines(draw_labels=True)
+
+            ax.legend(loc="upper left")
+            # ax.title(f'Station {sorted_names[station]} taking radius of {dmedia} km')
+
 
     except (KeyError, ValueError):  # Handle cases where station might not exist in df or time has NaNs
         # Print message or log the issue and save the station index for dropping the empty stations
@@ -421,7 +448,8 @@ table_all = pd.DataFrame({'station': sorted_names,
                           # 'n_nans': [int(x) for x in n_nans_tg],
                           # '%_Gaps': [round(num, 2) for num in percent_nans],
                           'latitude': ordered_lat,
-                          'longitude': ordered_lon
+                          'longitude': ordered_lon,
+                            'min_distance': min_distances
                           })
 
 # Dropping wrong tide gauges.
