@@ -302,6 +302,7 @@ df_tg = pd.concat(df_tg, ignore_index=True).dropna(how='any')
 # ---------------- MANAGING COMPARISON BETWEEN TG AND SWO ------------------------------------------------
 
 empty_stations = []  # List to store empty stations indexes
+lolabox = [1, 8, 35, 45]
 
 idx_tg = np.arange(len(sorted_names))
 for station in idx_tg:
@@ -387,9 +388,6 @@ for station in idx_tg:
             plt.tick_params(axis='both', which='major', labelsize=11)
 
             # PLOT MAP OF DATA OBTAINED FROM EACH GAUGE!
-            lolabox = [1, 8, 35, 45]
-
-            # Your existing code for plotting the map
             fig, ax = plt.subplots(figsize=(10.5, 11), subplot_kw=dict(projection=ccrs.PlateCarree()))
 
             # Set the extent to focus on the defined lon-lat box
