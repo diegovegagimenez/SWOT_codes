@@ -200,7 +200,7 @@ for filename in nc_files:
         # Append the selected data to the list
         all_cmems_timeseries.append(selected_data)
 
-# Dataframe to store time series data for each station (key: station_name, value[list of SSH, lat, lon and time values])
+# Dataframe to store time series data for each station
 station_time_series = []
 
 for i in range(0, len(all_cmems_timeseries)):  # Loop through each file's data
@@ -238,7 +238,7 @@ var_CMEMS = []
 var_diff = []
 days_used_per_gauge = []
 n_nans_tg = []
-
+        
 # CONVERT TO DATAFRAME for easier managing
 df = pd.DataFrame(all_cmems_timeseries).dropna(how='any')  # Convert to DataFrame
 
@@ -275,6 +275,7 @@ df_tg = pd.concat(df_tg, ignore_index=True).dropna(how='any')
 
 # ---------------- MANAGING COMPARISON BETWEEN TG AND SWO ------------------------------------------------
 empty_stations = []
+lolabox = [1, 8, 35, 45]
 
 idx_tg = np.arange(len(sorted_names))
 for station in idx_tg:
@@ -335,7 +336,7 @@ for station in idx_tg:
         # Num days used
         days_used_per_gauge.append(len(cmems_ts))
 
-        # PLOT SERIES TEMPORALES INCLUYENDO GAPS!
+        # PLOTTING TIME SERIES
         plt.figure(figsize=(10, 6))
         plt.plot(cmems_ts['time'], cmems_ts['demean'], label='CMEMS data')
         plt.scatter(cmems_ts['time'], cmems_ts['demean'])
@@ -349,10 +350,7 @@ for station in idx_tg:
         plt.ylabel('SSHA (m)')
         plt.tick_params(axis='both', which='major', labelsize=11)
 
-        # PLOT MAP OF DATA OBTAINED FROM EACH GAUGE!
-        lolabox = [1, 8, 35, 45]
-
-        # Your existing code for plotting the map
+        # MAP PLOT OF CMEMS LOCATIONS OBTAINED FROM EACH GAUGE!
         fig, ax = plt.subplots(figsize=(10.5, 11), subplot_kw=dict(projection=ccrs.PlateCarree()))
 
         # Set the extent to focus on the defined lon-lat box
@@ -411,6 +409,5 @@ drop_tg = [5, 7, 11, 14]
 
 table = table_all.drop(drop_tg)
 table.reset_index(inplace=True)
-
 # table.to_excel(f'{path}Figures/CMEMS/tablas_CMEMS_reprocessed/comparison_cmems_tg_{dmedia}rad_nrt.xlsx', index=False)
 
