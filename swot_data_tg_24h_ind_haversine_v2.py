@@ -6,9 +6,9 @@ import os
 import cartopy.crs as ccrs
 from shapely.geometry import LineString
 import cartopy.feature as cfeature
+import statsmodels.api as sm  # for LOWESS filter
+import loess_smooth_handmade as loess  # for LOESS filter
 
-import mplcursors
-from math import sqrt
 
 
 # Function for calculating the Haversine distance between two points
@@ -304,6 +304,10 @@ df_tg = pd.concat(df_tg, ignore_index=True).dropna(how='any')
 empty_stations = []  # List to store empty stations indexes
 lolabox = [1, 8, 35, 45]
 
+# Define the column name for the demeaned values according if the data is filtered or not
+# demean = 'demean'
+demean = 'demean_filtered'
+
 idx_tg = np.arange(len(sorted_names))
 for station in idx_tg:
     try:
@@ -350,18 +354,25 @@ for station in idx_tg:
             tg_ts.reset_index(inplace=True)
             swot_ts.reset_index(inplace=True)
 
+            # Filter noise from SWOT data using LOESS filter
+            frac_lowess = 10 / len(swot_ts)  #  10 days window
+            frac_loess = len(swot_ts) / 3.5  #  3.5 days window
+            # filt_lowess = sm.nonparametric.lowess(swot_ts['demean'], swot_ts['time'], frac=frac_lowess, return_sorted=False)
+            filt_loess = loess.loess_smooth_handmade(swot_ts['demean'].values, frac_lowess)
+            swot_ts['demean_filtered'] = filt_loess
+
             # Calculate correlation between swot and tg
-            correlation = swot_ts['demean'].corr(tg_ts['demean'])
+            correlation = swot_ts[demean].corr(tg_ts['demean'])
 
             # Calculate RMSD between swot and tg
-            rmsd = np.sqrt(np.mean((swot_ts['demean'] - tg_ts['demean']) ** 2))
+            rmsd = np.sqrt(np.mean((swot_ts[demean] - tg_ts['demean']) ** 2))
 
             # Calculate variances of swot and tg
-            var_swot_df = swot_ts['demean'].var()
+            var_swot_df = swot_ts[demean].var()
             var_tg_df = tg_ts['demean'].var()
 
             # Calculate the variance of the difference between swot and tg
-            var_diff_df = (swot_ts['demean'] - tg_ts['demean']).var()
+            var_diff_df = (swot_ts[demean] - tg_ts['demean']).var()
 
             rmsds.append(rmsd)
             correlations.append(correlation)
@@ -377,7 +388,7 @@ for station in idx_tg:
 
             # PLOT SERIES TEMPORALES INCLUYENDO GAPS!
             plt.figure(figsize=(10, 6))
-            plt.plot(swot_ts['time'], swot_ts['demean'], label='SWOT data')
+            plt.plot(swot_ts['time'], swot_ts[demean], label='SWOT data')
             plt.plot(tg_ts['time'], tg_ts['demean'], label='Tide Gauge Data')
             plt.title(f'Station {sorted_names[station]} taking radius of {dmedia} km')
             plt.legend()
