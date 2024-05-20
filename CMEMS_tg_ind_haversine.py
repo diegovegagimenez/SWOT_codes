@@ -6,6 +6,9 @@ import os
 import cartopy.crs as ccrs
 from shapely.geometry import LineString
 import cartopy.feature as cfeature
+import statsmodels.api as sm  # for LOWESS filter
+import loess_smooth_handmade as loess  # for LOESS filter
+
 
 # Function for calculating the Haversine distance between two points
 def haversine(lon1, lat1, lon2, lat2):
@@ -99,7 +102,7 @@ lolabox = [-2, 8, 35, 45]
 strategy = 0
 
 # Maximum distance from each CMEMS point to the tide gauge location
-dmedia = 10 # Km
+dmedia = 6 # Km
 
 # List to store all CMEMS time series (one list per tide gauge)
 all_cmems_timeseries = []
@@ -277,6 +280,10 @@ df_tg = pd.concat(df_tg, ignore_index=True).dropna(how='any')
 empty_stations = []
 lolabox = [1, 8, 35, 45]
 
+# Define the column name for the demeaned values according if the data is filtered or not
+# demean = 'demean'
+demean = 'demean_filtered'
+
 idx_tg = np.arange(len(sorted_names))
 for station in idx_tg:
     try:
@@ -314,18 +321,33 @@ for station in idx_tg:
         tg_ts.reset_index(inplace=True)
         cmems_ts.reset_index(inplace=True)
 
+        if len(cmems_ts) != 0:
+            # Filter noise from SWOT data using LOESS filter
+            frac_lowess = 10 / len(cmems_ts)  #  10 days window
+            frac_loess = 1 / 7  #  7 days window    fc = 1/Scale
+            # filt_lowess = sm.nonparametric.lowess(swot_ts['demean'], swot_ts['time'], frac=frac_lowess, return_sorted=False)
+            filt_loess = loess.loess_smooth_handmade(cmems_ts['demean'].values, frac_loess)
+            cmems_ts['demean_filtered'] = filt_loess
+
+        else:
+            empty_stations.append(station)
+            print(f"Station {sorted_names[station]} has no CMEMS data")
+            continue
+
+        
+
         # Calculate correlation between cmems and tg
-        correlation = cmems_ts['demean'].corr(tg_ts['demean'])
+        correlation = cmems_ts[demean].corr(tg_ts['demean'])
 
         # Calculate RMSD between cmems and tg
-        rmsd = np.sqrt(np.mean((cmems_ts['demean'] - tg_ts['demean']) ** 2))
+        rmsd = np.sqrt(np.mean((cmems_ts[demean] - tg_ts['demean']) ** 2))
 
         # Calculate variances of cmems and tg
-        var_cmems_df = cmems_ts['demean'].var()
+        var_cmems_df = cmems_ts[demean].var()
         var_tg_df = tg_ts['demean'].var()
 
         # Calculate the variance of the difference between cmems and tg
-        var_diff_df = (cmems_ts['demean'] - tg_ts['demean']).var()
+        var_diff_df = (cmems_ts[demean] - tg_ts['demean']).var()
 
         rmsds.append(rmsd)
         correlations.append(correlation)
@@ -338,8 +360,8 @@ for station in idx_tg:
 
         # PLOTTING TIME SERIES
         plt.figure(figsize=(10, 6))
-        plt.plot(cmems_ts['time'], cmems_ts['demean'], label='CMEMS data')
-        plt.scatter(cmems_ts['time'], cmems_ts['demean'])
+        plt.plot(cmems_ts['time'], cmems_ts[demean], label='CMEMS data')
+        plt.scatter(cmems_ts['time'], cmems_ts[demean])
         plt.plot(tg_ts['time'], tg_ts['demean'], label='Tide Gauge Data')
         plt.scatter(tg_ts['time'], tg_ts['demean'])
         plt.title(f'Station {sorted_names[station]} using {dmedia} km radius')
@@ -390,6 +412,12 @@ for station_name in sorted_names:
     n_val.append(round(n_val_avg, 2))  # Round n_val_avg to 2 decimals
 
 
+# Drop stations variables with no SWOT data for matching with the table
+sorted_names = [x for i, x in enumerate(sorted_names) if i not in empty_stations]
+ordered_lat = [x for i, x in enumerate(ordered_lat) if i not in empty_stations]
+ordered_lon = [x for i, x in enumerate(ordered_lon) if i not in empty_stations] 
+n_val = [x for i, x in enumerate(n_val) if i not in empty_stations]
+
 table_all = pd.DataFrame({'station': sorted_names,
                           'correlation': correlations,
                           'rmds': rmsds,
@@ -404,10 +432,14 @@ table_all = pd.DataFrame({'station': sorted_names,
                           'longitude': ordered_lon
                           })
 
-# TG with problems
+# Dropping wrong tide gauges.
 drop_tg = [5, 7, 11, 14]
+drop_tg_names = [sorted_names[i] for i in drop_tg]
 
-table = table_all.drop(drop_tg)
-table.reset_index(inplace=True)
+def filter_rows_by_values(df, col, values):
+    return df[~df[col].isin(values)]
+
+table = filter_rows_by_values(table_all, 'station', drop_tg_names).reset_index(drop=True)
+
 # table.to_excel(f'{path}Figures/CMEMS/tablas_CMEMS_reprocessed/comparison_cmems_tg_{dmedia}rad_nrt.xlsx', index=False)
 
