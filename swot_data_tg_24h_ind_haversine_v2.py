@@ -8,7 +8,9 @@ from shapely.geometry import LineString
 import cartopy.feature as cfeature
 import statsmodels.api as sm  # for LOWESS filter
 import loess_smooth_handmade as loess  # for LOESS filter
-
+import matplotlib.dates as mdates
+import warnings
+warnings.filterwarnings("ignore")
 
 
 # Function for calculating the Haversine distance between two points
@@ -116,7 +118,7 @@ data_arrays = ordered_data_arrays
 strategy = 0
 
 # Radius in km for averaging nearby points
-dmedia = 50  # km
+dmedia = 6  # km
 
 # List to store all SWOT time series (one list per tide gauge)
 all_swot_timeseries = []
@@ -172,10 +174,13 @@ for filename in nc_files:
             else:
                 ssh_serie = np.nan  # No data within radius (remains NaN)
                 time_serie = time[in_radius][~np.isnan(time[in_radius])]
+                n_idx = np.nan  # 0 points for the average within the radius
 
                 # If there's no SWOT data within the radius, set latitudes and longitudes to None
                 swot_lat_within_radius = None
                 swot_lon_within_radius = None
+                min_distance_point = None
+
                 # print(f"No SWOT data within {dmedia} km radius of tide gauge {sorted_names[idx]}")
 
             # Create a dictionary to store tide gauge and SWOT data
@@ -355,10 +360,10 @@ for station in idx_tg:
             swot_ts.reset_index(inplace=True)
 
             # Filter noise from SWOT data using LOESS filter
-            frac_lowess = 10 / len(swot_ts)  #  10 days window
-            frac_loess = len(swot_ts) / 3.5  #  3.5 days window
+            # frac_lowess = 10 / len(swot_ts)  #  10 days window
+            frac_loess = 1 / 14  #  7 days window
             # filt_lowess = sm.nonparametric.lowess(swot_ts['demean'], swot_ts['time'], frac=frac_lowess, return_sorted=False)
-            filt_loess = loess.loess_smooth_handmade(swot_ts['demean'].values, frac_lowess)
+            filt_loess = loess.loess_smooth_handmade(swot_ts['demean'].values, frac_loess)
             swot_ts['demean_filtered'] = filt_loess
 
             # Calculate correlation between swot and tg
@@ -389,14 +394,18 @@ for station in idx_tg:
             # PLOT SERIES TEMPORALES INCLUYENDO GAPS!
             plt.figure(figsize=(10, 6))
             plt.plot(swot_ts['time'], swot_ts[demean], label='SWOT data')
+            plt.scatter(swot_ts['time'], swot_ts[demean], label='SWOT data')
             plt.plot(tg_ts['time'], tg_ts['demean'], label='Tide Gauge Data')
-            plt.title(f'Station {sorted_names[station]} taking radius of {dmedia} km')
+            plt.title(f'Station {sorted_names[station]} using radius of {dmedia} km')
             plt.legend()
             plt.xticks(rotation=20)
+            plt.yticks(np.arange(-15, 18, 3))
             # plt.xlabel('time')
             plt.grid(True, alpha=0.2)
             plt.ylabel('SSHA (cm)')
             plt.tick_params(axis='both', which='major', labelsize=11)
+            plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%m-%d'))  # Use '%m-%d' for MM-DD format
+            plt.gca().xaxis.set_major_locator(mdates.DayLocator(interval=10))
 
             # PLOT MAP OF DATA OBTAINED FROM EACH GAUGE!
             fig, ax = plt.subplots(figsize=(10.5, 11), subplot_kw=dict(projection=ccrs.PlateCarree()))
@@ -440,13 +449,13 @@ for station_name in sorted_names:
 
 
 # Drop stations variables with no SWOT data for matching with the table
-sorted_names = [x for i, x in enumerate(sorted_names) if i not in empty_stations]
-ordered_lat = [x for i, x in enumerate(ordered_lat) if i not in empty_stations]
-ordered_lon = [x for i, x in enumerate(ordered_lon) if i not in empty_stations] 
+sorted_names_mod = [x for i, x in enumerate(sorted_names) if i not in empty_stations]
+ordered_lat_mod = [x for i, x in enumerate(ordered_lat) if i not in empty_stations]
+ordered_lon_mod = [x for i, x in enumerate(ordered_lon) if i not in empty_stations] 
 n_val = [x for i, x in enumerate(n_val) if i not in empty_stations]
 
 # Create a DataFrame to store all the statistics
-table_all = pd.DataFrame({'station': sorted_names,
+table_all = pd.DataFrame({'station': sorted_names_mod,
                           'correlation': correlations,
                           'rmsd': rmsds,
                           'var_TG': var_tg,
@@ -456,17 +465,16 @@ table_all = pd.DataFrame({'station': sorted_names,
                           'n_days': days_used_per_gauge,
                           # 'n_nans': [int(x) for x in n_nans_tg],
                           # '%_Gaps': [round(num, 2) for num in percent_nans],
-                          'latitude': ordered_lat,
-                          'longitude': ordered_lon,
+                          'latitude': ordered_lat_mod,
+                          'longitude': ordered_lon_mod,
                             'min_distance': min_distances
                           })
 
-# Dropping wrong tide gauges.
-drop_tg = [5, 7, 11, 14]
-drop_tg_names = [sorted_names[i] for i in drop_tg]
-
-def filter_rows_by_values(df, col, values):
-    return df[~df[col].isin(values)]
-
-table = filter_rows_by_values(table_all, 'station', drop_tg_names).reset_index(drop=True)
-# table.to_excel(f'{path}SWOT-TG_comparisons/comparison_swot_tg_{dmedia}km.xlsx', index=False)
+    # Dropping wrong tide gauges (errors in tide gauge raw data) or tide gauges with no SWOT data
+drop_tg_names = ['station_GL_TS_TG_TamarisTG',
+                    'station_GL_TS_TG_BaieDuLazaretTG',
+                    'station_GL_TS_TG_PortDeCarroTG',
+                    'station_GL_TS_TG_CassisTG',
+                    'station_MO_TS_PORTO_CRISTO']
+    
+table = table_all[~table_all['station'].isin(drop_tg_names)].reset_index(drop=True)# table.to_excel(f'{path}SWOT-TG_comparisons/comparison_swot_tg_{dmedia}km.xlsx', index=False)
