@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 import xarray as xr
 import pandas as pd
 import os
+import math
 import cartopy.crs as ccrs
 from shapely.geometry import LineString
 import cartopy.feature as cfeature
@@ -32,8 +33,9 @@ def haversine(lon1, lat1, lon2, lat2):
 
 path ='/home/dvega/anaconda3/work/SWOT/'
 
-folder_path = (f'{path}swot_basic_1day/003_016_pass/')  # Define SWOT passes folders
-                
+# folder_path = (f'{path}swot_basic_1day/003_016_pass/')  # Define SWOT passes folders
+folder_path = (f'{path}swot_basic_1day/003_016_passv1.0/')  # Define SWOT passes folders
+
 data_tg = np.load(f'{path}mareografos/TGresiduals1d_2023_European_Seas_SWOT_FSP.npz')
 names_tg = pd.read_csv(f'{path}mareografos/GLOBAL_TGstations_CMEMS_SWOT_FSP_Feb2024', header=None)
 
@@ -119,7 +121,7 @@ data_arrays = ordered_data_arrays
 strategy = 0
 
 # Radius in km for averaging nearby points
-dmedia = np.arange(5, 100, 5)
+dmedia = np.arange(5, 60, 5)
 
 # Loop through all netCDF files in the folder
 nc_files = [f for f in os.listdir(folder_path) if f.endswith('.nc')]
@@ -365,18 +367,18 @@ for rad in dmedia:
                 tg_ts.reset_index(inplace=True)
                 swot_ts.reset_index(inplace=True)
 
-                # if len(swot_ts) != 0:
-                #     # Filter noise from SWOT data using LOESS filter
-                #     frac_lowess = 10 / len(swot_ts)  #  10 days window
-                #     frac_loess = 1 / 7  #  7 days window    fc = 1/Scale
-                #     # filt_lowess = sm.nonparametric.lowess(swot_ts['demean'], swot_ts['time'], frac=frac_lowess, return_sorted=False)
-                #     filt_loess = loess.loess_smooth_handmade(swot_ts['demean'].values, frac_loess)
-                #     swot_ts['demean_filtered'] = filt_loess
+                if len(swot_ts) != 0:
+                    # Filter noise from SWOT data using LOESS filter
+                    # frac_lowess = 10 / len(swot_ts)  #  10 days window
+                    frac_loess = 1 / 7  #  7 days window    fc = 1/Scale
+                    # filt_lowess = sm.nonparametric.lowess(swot_ts['demean'], swot_ts['time'], frac=frac_lowess, return_sorted=False)
+                    filt_loess = loess.loess_smooth_handmade(swot_ts['demean'].values, frac_loess)
+                    swot_ts['demean_filtered'] = filt_loess
 
-                # else:
-                #     empty_stations.append(station)
-                #     # print(f"Station {sorted_names[station]} has no CMEMS data")
-                #     continue
+                else:
+                    empty_stations.append(station)
+                    # print(f"Station {sorted_names[station]} has no CMEMS data")
+                    continue
 
                 # Calculate correlation between swot and tg
                 correlation = swot_ts[demean].corr(tg_ts['demean'])
@@ -457,7 +459,25 @@ for rad in dmedia:
 
     # table.to_excel(f'{path}SWOT-TG_comparisons/comparison_swot_tg_{dmedia}km.xlsx', index=False)
 
-    results_rad_comparison.append({'radius': rad, 'rmsd': table['rmsd'].mean(), 'n_tg_used': len(table)})
+    # Average RMSD values taking in account the non-linear behaviour of the RMSD
+    # Delete the wrong rows/tgs from rmsds
+    threshold = 5  # RMSD > 5 out
+
+    # Step 1: Square each RMSD value and filter by threshold
+    squared_rmsd = [x**2 for x in rmsds if x < threshold]
+    
+    # Step 2: Sum the squared RMSD values
+    sum_squared_rmsd = sum(squared_rmsd)
+    
+    # Step 3: Compute the mean of the squared RMSD values
+    mean_squared_rmsd = sum_squared_rmsd / len(rmsds)
+    
+    # Step 4: Take the square root of the mean
+    combined_rmsd = math.sqrt(mean_squared_rmsd)
+
+    results_rad_comparison.append({'radius': rad, 'rmsd': combined_rmsd, 'n_tg_used': len(table)})
+
+    # results_rad_comparison.append({'radius': rad, 'rmsd': table['rmsd'].mean(), 'n_tg_used': len(table)})
     print(f'Radius: {rad} km processesed.')
 
 results_df = pd.DataFrame(results_rad_comparison)
