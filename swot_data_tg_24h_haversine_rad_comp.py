@@ -9,6 +9,7 @@ from shapely.geometry import LineString
 import cartopy.feature as cfeature
 import statsmodels.api as sm  # for LOWESS filter
 import loess_smooth_handmade as loess  # for LOESS filter
+import matplotlib.dates as mdates
 import warnings
 # Set the warning filter to "ignore" to suppress all warnings
 warnings.filterwarnings("ignore")
@@ -121,7 +122,7 @@ data_arrays = ordered_data_arrays
 strategy = 0
 
 # Radius in km for averaging nearby points
-dmedia = np.arange(5, 60, 5)
+dmedia = np.arange(10, 15, 5)
 
 # Loop through all netCDF files in the folder
 nc_files = [f for f in os.listdir(folder_path) if f.endswith('.nc')]
@@ -311,8 +312,7 @@ for rad in dmedia:
     df_tg = pd.concat(df_tg, ignore_index=True).dropna(how='any')
 
 
-
-    # ---------------- MANAGING COMPARISON BETWEEN TG AND SWO ------------------------------------------------
+    # ---------------- MANAGING COMPARISON BETWEEN TG AND SWOT ------------------------------------------------
 
     empty_stations = []  # List to store empty stations indexes
     lolabox = [1, 8, 35, 45]
@@ -367,31 +367,40 @@ for rad in dmedia:
                 tg_ts.reset_index(inplace=True)
                 swot_ts.reset_index(inplace=True)
 
-                if len(swot_ts) != 0:
-                    # Filter noise from SWOT data using LOESS filter
-                    # frac_lowess = 10 / len(swot_ts)  #  10 days window
-                    frac_loess = 1 / 7  #  7 days window    fc = 1/Scale
+                if len(swot_ts) != 0: #---------------------------------------------------------------------------------------------
+
+                    # Filter noise using LOESS filter
+                    day_window = 7
+                    # frac_lowess = day_window / len(cmems_ts)  #  10 days window
+                    frac_loess = 1 / day_window #  7 days window    fc = 1/Scale
+
+                    # SWOT
                     # filt_lowess = sm.nonparametric.lowess(swot_ts['demean'], swot_ts['time'], frac=frac_lowess, return_sorted=False)
                     filt_loess = loess.loess_smooth_handmade(swot_ts['demean'].values, frac_loess)
                     swot_ts['demean_filtered'] = filt_loess
 
+                    # TGs
+                    # filt_lowess = sm.nonparametric.lowess(tg_ts['demean'], tg_ts['time'], frac=frac_lowess, return_sorted=False)
+                    filt_loess = loess.loess_smooth_handmade(tg_ts['demean'].values, frac_loess)
+                    tg_ts['demean_filtered'] = filt_loess
+
                 else:
                     empty_stations.append(station)
-                    # print(f"Station {sorted_names[station]} has no CMEMS data")
-                    continue
+                    print(f"Station {sorted_names[station]} has no CMEMS data")
+                    continue  #---------------------------------------------------------------------------------------------
 
                 # Calculate correlation between swot and tg
-                correlation = swot_ts[demean].corr(tg_ts['demean'])
+                correlation = swot_ts[demean].corr(tg_ts[demean])
 
                 # Calculate RMSD between swot and tg
-                rmsd = np.sqrt(np.mean((swot_ts[demean] - tg_ts['demean']) ** 2))
+                rmsd = np.sqrt(np.mean((swot_ts[demean] - tg_ts[demean]) ** 2))
 
                 # Calculate variances of swot and tg
                 var_swot_df = swot_ts[demean].var()
-                var_tg_df = tg_ts['demean'].var()
+                var_tg_df = tg_ts[demean].var()
 
                 # Calculate the variance of the difference between swot and tg
-                var_diff_df = (swot_ts[demean] - tg_ts['demean']).var()
+                var_diff_df = (swot_ts[demean] - tg_ts[demean]).var()
 
                 rmsds.append(rmsd)
                 correlations.append(correlation)
@@ -404,6 +413,41 @@ for rad in dmedia:
 
                 # Average min distances
                 min_distances.append(swot_ts['min_distance'].min())
+
+                # PLOT SERIES TEMPORALES INCLUYENDO GAPS!
+                plt.figure(figsize=(10, 6))
+                plt.plot(swot_ts['time'], swot_ts[demean], label='SWOT data')
+                plt.scatter(swot_ts['time'], swot_ts[demean])
+                plt.plot(tg_ts['time'], tg_ts[demean], label='Tide Gauge Data')
+                plt.title(f'Station {sorted_names[station]} using radius of {dmedia}km, {day_window}dLoess and V1.0 SWOT')
+                plt.legend()
+                plt.xticks(rotation=20)
+                plt.yticks(np.arange(-15, 18, 3))
+                # plt.xlabel('time')
+                plt.grid(True, alpha=0.2)
+                plt.ylabel('SSHA (cm)')
+                plt.tick_params(axis='both', which='major', labelsize=11)
+                plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%m-%d'))  # Use '%m-%d' for MM-DD format
+                plt.gca().xaxis.set_major_locator(mdates.DayLocator(interval=10))
+
+                # plt.savefig(f'{plot_path}{sorted_names[station]}_{dmedia}km_{days_to_filter}dLoess.png')
+
+                # PLOT MAP OF DATA OBTAINED FROM EACH GAUGE!
+                fig, ax = plt.subplots(figsize=(10.5, 11), subplot_kw=dict(projection=ccrs.PlateCarree()))
+
+                # Set the extent to focus on the defined lon-lat box
+                ax.set_extent(lolabox, crs=ccrs.PlateCarree())
+
+                # Add scatter plot for specific locations
+                ax.scatter(tg_ts['longitude'][0], tg_ts['latitude'][0], c='black', marker='o', s=50, transform=ccrs.Geodetic(), label='Tide Gauge')
+                ax.scatter(swot_ts['swot_lon_within_radius'][0], swot_ts['swot_lat_within_radius'][0], c='blue', marker='o', s=50, transform=ccrs.Geodetic(), label='SWOT data')
+
+                # Add coastlines and gridlines
+                ax.coastlines()
+                ax.gridlines(draw_labels=True)
+
+                ax.legend(loc="upper left")
+                # ax.title(f'Station {sorted_names[station]} taking radius of {dmedia} km')
 
 
         except (KeyError, ValueError):  # Handle cases where station might not exist in df or time has NaNs
@@ -453,7 +497,8 @@ for rad in dmedia:
     drop_tg_names = ['station_GL_TS_TG_TamarisTG',
                     'station_GL_TS_TG_BaieDuLazaretTG',
                     'station_GL_TS_TG_PortDeCarroTG',
-                    'station_GL_TS_TG_CassisTG']
+                    'station_GL_TS_TG_CassisTG',
+                    'station_MO_TS_TG_PORTO-CRISTO']
     
     table = table_all[~table_all['station'].isin(drop_tg_names)].reset_index(drop=True)
 
