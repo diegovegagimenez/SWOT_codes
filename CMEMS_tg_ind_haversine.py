@@ -11,6 +11,7 @@ import statsmodels.api as sm  # for LOWESS filter
 # Set the warning filter to "ignore" to suppress all warnings
 warnings.filterwarnings("ignore")
 import loess_smooth_handmade as loess  # for LOESS filter
+import math
 
 
 # Function for calculating the Haversine distance between two points
@@ -373,7 +374,7 @@ for rad in dmedia:
             plt.scatter(cmems_ts['time'], cmems_ts[demean])
             plt.plot(tg_ts['time'], tg_ts[demean], label='Tide Gauge Data')
             plt.scatter(tg_ts['time'], tg_ts[demean])
-            plt.title(f'Station {sorted_names[station]} using {dmedia} km radius')
+            plt.title(f'Station {sorted_names[station]} using {rad} km radius')
             plt.legend()
             plt.xticks(rotation=20)
             # plt.xlabel('time')
@@ -429,33 +430,40 @@ for rad in dmedia:
 
     table_all = pd.DataFrame({'station': sorted_names_mod,
                             'correlation': correlations,
-                            'rmds': rmsds,
+                            'rmsd': rmsds,
                             'var_TG': var_tg,
                             'var_CMEMS': var_CMEMS,
                             'var_diff': var_diff,
                             'num_cmems_points': n_val,
                             'n_days': days_used_per_gauge,
-                            # 'n_nans': [int(x) for x in n_nans_tg],
-                            # '%_Gaps': [round(num, 2) for num in percent_nans],
                             'latitude': ordered_lat_mod,
                             'longitude': ordered_lon_mod
                             })
 
-    # Dropping wrong tide gauges.
-    # drop_tg = [5, 7, 11, 14]
-    # drop_tg_names = [sorted_names[i] for i in drop_tg]
-
+    # Dropping wrong tide gauges (errors in tide gauge raw data)
     drop_tg_names = ['station_GL_TS_TG_TamarisTG',
                     'station_GL_TS_TG_BaieDuLazaretTG',
                     'station_GL_TS_TG_PortDeCarroTG',
-                    'station_GL_TS_TG_CassisTG']
+                    'station_GL_TS_TG_CassisTG',
+                    'station_MO_TS_TG_PORTO-CRISTO']
     
-    def filter_rows_by_values(df, col, values):
-        return df[~df[col].isin(values)]
+    table = table_all[~table_all['station'].isin(drop_tg_names)].reset_index(drop=True)
 
-    table = filter_rows_by_values(table_all, 'station', drop_tg_names).reset_index(drop=True)
+    # Average RMSD values taking in account the non-linear behaviour of the RMSD
+    # Delete the wrong rows/tgs from rmsds
+    threshold = 10  # RMSD > 5 out
 
-    results_rad_comparison.append({'radius': rad, 'rmsd': table['rmds'].mean(), 'n_tg_used': len(table)})
-    print(f'Radius: {rad} km processed')
-    # table.to_excel(f'{path}Figures/CMEMS/tablas_CMEMS_reprocessed/comparison_cmems_tg_{dmedia}rad_nrt.xlsx', index=False)
+    # Step 1: Square each RMSD value and filter by threshold
+    squared_rmsd = [x**2 for x in rmsds if x < threshold]
+    
+    # Step 2: Compute the mean of the squared RMSD values
+    mean_squared_rmsd = sum(squared_rmsd)/ len(rmsds)
+    
+    # Step 3: Take the square root of the mean
+    combined_rmsd = math.sqrt(mean_squared_rmsd)
+
+    results_rad_comparison.append({'radius': rad, 'rmsd': combined_rmsd, 'n_tg_used': len(table['rmsd'].dropna())})
+
 results_df = pd.DataFrame(results_rad_comparison)
+
+results_df
