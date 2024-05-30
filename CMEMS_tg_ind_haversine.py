@@ -109,13 +109,14 @@ results_rad_comparison = []  # List to store results for each radius
 
 # Maximum distance from each CMEMS point to the tide gauge location
 
-dmedia = np.arange(10, 115, 5)  # Array of distances from 5 to 110 km in 5 km increments
+dmedia = np.arange(5, 20, 5)  # Array of distances from 5 to 110 km in 5 km increments
 
 # Loop through all netCDF files in the folder
 nc_files = [f for f in os.listdir(cmems_path) if f.endswith('.nc')]
 
 for rad in dmedia:
-
+    print(f'Beggining processing radius {rad} km')
+    print(f'{sorted_names}')
     # List to store all CMEMS time series (one list per radius size)
     all_cmems_timeseries = []
 
@@ -324,33 +325,37 @@ for rad in dmedia:
             cmems_ts.reset_index(inplace=True)
 
             if len(cmems_ts) != 0:
-                # Filter noise from SWOT data using LOESS filter
-                frac_lowess = 10 / len(cmems_ts)  #  10 days window
-                frac_loess = 1 / 7  #  7 days window    fc = 1/Scale
+                # Filter noise using LOESS filter
+                day_window = 7
+                # frac_lowess = day_window / len(cmems_ts)  #  10 days window
+                frac_loess = 1 / day_window #  7 days window    fc = 1/Scale
+
+                # SWOT
                 # filt_lowess = sm.nonparametric.lowess(swot_ts['demean'], swot_ts['time'], frac=frac_lowess, return_sorted=False)
                 filt_loess = loess.loess_smooth_handmade(cmems_ts['demean'].values, frac_loess)
                 cmems_ts['demean_filtered'] = filt_loess
 
+                # TGs
+                # filt_lowess = sm.nonparametric.lowess(tg_ts['demean'], tg_ts['time'], frac=frac_lowess, return_sorted=False)
+                filt_loess = loess.loess_smooth_handmade(tg_ts['demean'].values, frac_loess)
+                tg_ts['demean_filtered'] = filt_loess
             else:
                 empty_stations.append(station)
                 print(f"Station {sorted_names[station]} has no CMEMS data")
                 continue
 
-
             # Calculate correlation between cmems and tg
-            correlation = cmems_ts[demean].corr(tg_ts['demean'])
+            correlation = cmems_ts[demean].corr(tg_ts[demean])
 
             # Calculate RMSD between cmems and tg
-            rmsd = np.sqrt(np.mean((cmems_ts[demean] - tg_ts['demean']) ** 2))
-
-            print(f'rmsd: {rmsd}')
+            rmsd = np.sqrt(np.mean((cmems_ts[demean] - tg_ts[demean]) ** 2))
 
             # Calculate variances of cmems and tg
             var_cmems_df = cmems_ts[demean].var()
             var_tg_df = tg_ts['demean'].var()
 
             # Calculate the variance of the difference between cmems and tg
-            var_diff_df = (cmems_ts[demean] - tg_ts['demean']).var()
+            var_diff_df = (cmems_ts[demean] - tg_ts[demean]).var()
 
             rmsds.append(rmsd)
 
@@ -362,36 +367,36 @@ for rad in dmedia:
             # Num days used
             days_used_per_gauge.append(len(cmems_ts))
 
-            # # PLOTTING TIME SERIES
-            # plt.figure(figsize=(10, 6))
-            # plt.plot(cmems_ts['time'], cmems_ts[demean], label='CMEMS data')
-            # plt.scatter(cmems_ts['time'], cmems_ts[demean])
-            # plt.plot(tg_ts['time'], tg_ts['demean'], label='Tide Gauge Data')
-            # plt.scatter(tg_ts['time'], tg_ts['demean'])
-            # plt.title(f'Station {sorted_names[station]} using {dmedia} km radius')
-            # plt.legend()
-            # plt.xticks(rotation=20)
-            # # plt.xlabel('time')
-            # plt.grid(True, alpha=0.2)
-            # plt.ylabel('SSHA (m)')
-            # plt.tick_params(axis='both', which='major', labelsize=11)
+            # PLOTTING TIME SERIES
+            plt.figure(figsize=(10, 6))
+            plt.plot(cmems_ts['time'], cmems_ts[demean], label='CMEMS data')
+            plt.scatter(cmems_ts['time'], cmems_ts[demean])
+            plt.plot(tg_ts['time'], tg_ts[demean], label='Tide Gauge Data')
+            plt.scatter(tg_ts['time'], tg_ts[demean])
+            plt.title(f'Station {sorted_names[station]} using {dmedia} km radius')
+            plt.legend()
+            plt.xticks(rotation=20)
+            # plt.xlabel('time')
+            plt.grid(True, alpha=0.2)
+            plt.ylabel('SSHA (m)')
+            plt.tick_params(axis='both', which='major', labelsize=11)
 
-            # # MAP PLOT OF CMEMS LOCATIONS OBTAINED FROM EACH GAUGE!
-            # fig, ax = plt.subplots(figsize=(10.5, 11), subplot_kw=dict(projection=ccrs.PlateCarree()))
+            # MAP PLOT OF CMEMS LOCATIONS OBTAINED FROM EACH GAUGE!
+            fig, ax = plt.subplots(figsize=(10.5, 11), subplot_kw=dict(projection=ccrs.PlateCarree()))
 
-            # # Set the extent to focus on the defined lon-lat box
-            # ax.set_extent(lolabox, crs=ccrs.PlateCarree())
+            # Set the extent to focus on the defined lon-lat box
+            ax.set_extent(lolabox, crs=ccrs.PlateCarree())
 
-            # # Add scatter plot for specific locations
-            # ax.scatter(tg_ts['longitude'][0], tg_ts['latitude'][0], c='black', marker='o', s=50, transform=ccrs.Geodetic(), label='Tide Gauge')
-            # ax.scatter(cmems_ts['cmems_lon_within_radius'][0], cmems_ts['cmems_lat_within_radius'][0], c='blue', marker='o', s=50, transform=ccrs.Geodetic(), label='CMEMS data')
+            # Add scatter plot for specific locations
+            ax.scatter(tg_ts['longitude'][0], tg_ts['latitude'][0], c='black', marker='o', s=50, transform=ccrs.Geodetic(), label='Tide Gauge')
+            ax.scatter(cmems_ts['cmems_lon_within_radius'][0], cmems_ts['cmems_lat_within_radius'][0], c='blue', marker='o', s=50, transform=ccrs.Geodetic(), label='CMEMS data')
 
-            # # Add coastlines and gridlines
-            # ax.coastlines()
-            # ax.gridlines(draw_labels=True)
+            # Add coastlines and gridlines
+            ax.coastlines()
+            ax.gridlines(draw_labels=True)
 
-            # ax.legend(loc="upper left")
-            # # ax.title(f'Station {sorted_names[station]}')
+            ax.legend(loc="upper left")
+            # ax.title(f'Station {sorted_names[station]}')
 
         except (KeyError, ValueError):  # Handle cases where station might not exist in df or time has NaNs
             # Print message or log the issue and save the station index for dropping the empty stations
@@ -399,7 +404,6 @@ for rad in dmedia:
             # print(f"Station {sorted_names[station]} not found in CMEMS data or time series has NaNs")
             continue  # Skip to the next iteration
 
-    print(len(rmsds))
 
     n_val = []  # List to store average number of CMEMS values per station
 
@@ -419,11 +423,9 @@ for rad in dmedia:
 
     # Drop stations variables with no SWOT data for matching with the table
     sorted_names_mod = [x for i, x in enumerate(sorted_names) if i not in empty_stations]
-    ordered_lat = [x for i, x in enumerate(ordered_lat) if i not in empty_stations]
-    ordered_lon = [x for i, x in enumerate(ordered_lon) if i not in empty_stations] 
+    ordered_lat_mod = [x for i, x in enumerate(ordered_lat) if i not in empty_stations]
+    ordered_lon_mod = [x for i, x in enumerate(ordered_lon) if i not in empty_stations] 
     n_val = [x for i, x in enumerate(n_val) if i not in empty_stations]
-
-    print((f'rmsd: {np.mean(rmsds)}'))
 
     table_all = pd.DataFrame({'station': sorted_names_mod,
                             'correlation': correlations,
@@ -435,20 +437,25 @@ for rad in dmedia:
                             'n_days': days_used_per_gauge,
                             # 'n_nans': [int(x) for x in n_nans_tg],
                             # '%_Gaps': [round(num, 2) for num in percent_nans],
-                            'latitude': ordered_lat,
-                            'longitude': ordered_lon
+                            'latitude': ordered_lat_mod,
+                            'longitude': ordered_lon_mod
                             })
 
     # Dropping wrong tide gauges.
-    drop_tg = [5, 7, 11, 14]
-    drop_tg_names = [sorted_names[i] for i in drop_tg]
+    # drop_tg = [5, 7, 11, 14]
+    # drop_tg_names = [sorted_names[i] for i in drop_tg]
 
+    drop_tg_names = ['station_GL_TS_TG_TamarisTG',
+                    'station_GL_TS_TG_BaieDuLazaretTG',
+                    'station_GL_TS_TG_PortDeCarroTG',
+                    'station_GL_TS_TG_CassisTG']
+    
     def filter_rows_by_values(df, col, values):
         return df[~df[col].isin(values)]
 
     table = filter_rows_by_values(table_all, 'station', drop_tg_names).reset_index(drop=True)
 
     results_rad_comparison.append({'radius': rad, 'rmsd': table['rmds'].mean(), 'n_tg_used': len(table)})
-
-# table.to_excel(f'{path}Figures/CMEMS/tablas_CMEMS_reprocessed/comparison_cmems_tg_{dmedia}rad_nrt.xlsx', index=False)
+    print(f'Radius: {rad} km processed')
+    # table.to_excel(f'{path}Figures/CMEMS/tablas_CMEMS_reprocessed/comparison_cmems_tg_{dmedia}rad_nrt.xlsx', index=False)
 results_df = pd.DataFrame(results_rad_comparison)
