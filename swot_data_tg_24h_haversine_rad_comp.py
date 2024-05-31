@@ -122,7 +122,7 @@ data_arrays = ordered_data_arrays
 strategy = 0
 
 # Radius in km for averaging nearby points
-dmedia = np.arange(10, 15, 5)
+dmedia = np.arange(10, 45, 5)
 
 # Loop through all netCDF files in the folder
 nc_files = [f for f in os.listdir(folder_path) if f.endswith('.nc')]
@@ -235,6 +235,16 @@ for rad in dmedia:
 
     # CONVERT TO DATAFRAME for easier managing
     df = pd.DataFrame(all_swot_timeseries).dropna(how='any')  # Convert to DataFrame
+
+    # Dropping wrong tide gauges (errors in tide gauge raw data)
+    drop_tg_names = ['station_GL_TS_TG_TamarisTG',
+                    'station_GL_TS_TG_BaieDuLazaretTG',
+                    'station_GL_TS_TG_PortDeCarroTG',
+                    'station_GL_TS_TG_CassisTG',
+                    'station_MO_TS_TG_PORTO-CRISTO']
+    
+    df = df[~df['station_name'].isin(drop_tg_names)].reset_index(drop=True)
+
 
 
     # Dataframe to store SWOT time series data for each TG station
@@ -415,38 +425,42 @@ for rad in dmedia:
                 min_distances.append(swot_ts['min_distance'].min())
 
                 # PLOT SERIES TEMPORALES INCLUYENDO GAPS!
-                plt.figure(figsize=(10, 6))
-                plt.plot(swot_ts['time'], swot_ts[demean], label='SWOT data')
-                plt.scatter(swot_ts['time'], swot_ts[demean])
-                plt.plot(tg_ts['time'], tg_ts[demean], label='Tide Gauge Data')
-                plt.title(f'Station {sorted_names[station]} using radius of {dmedia}km, {day_window}dLoess and V1.0 SWOT')
-                plt.legend()
-                plt.xticks(rotation=20)
-                plt.yticks(np.arange(-15, 18, 3))
-                # plt.xlabel('time')
-                plt.grid(True, alpha=0.2)
-                plt.ylabel('SSHA (cm)')
-                plt.tick_params(axis='both', which='major', labelsize=11)
-                plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%m-%d'))  # Use '%m-%d' for MM-DD format
-                plt.gca().xaxis.set_major_locator(mdates.DayLocator(interval=10))
+                # plt.figure(figsize=(10, 6))
+                # plt.plot(swot_ts['time'], swot_ts[demean], label='SWOT', c='b', linewidth=3)
+                # plt.plot(swot_ts['time'], swot_ts['demean'], label='SWOT unfiltered', linestyle='--', c='b', alpha=0.6)
+
+                # # plt.scatter(swot_ts['time'], swot_ts[demean])
+                # plt.plot(tg_ts['time'], tg_ts[demean], label='TGs', linewidth=3, c='g')
+                # plt.plot(tg_ts['time'], tg_ts['demean'], label='TGs unfiltered', linestyle='--', c='g', alpha=0.6)
+
+                # plt.title(f'Station {sorted_names[station]} using radius of {rad}km, {day_window}dLoess, V1.0 SWOT')
+                # plt.legend()
+                # plt.xticks(rotation=20)
+                # plt.yticks(np.arange(-15, 18, 3))
+                # # plt.xlabel('time')
+                # plt.grid(True, alpha=0.2)
+                # plt.ylabel('SSHA (cm)')
+                # plt.tick_params(axis='both', which='major', labelsize=11)
+                # plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%m-%d'))  # Use '%m-%d' for MM-DD format
+                # plt.gca().xaxis.set_major_locator(mdates.DayLocator(interval=10))
 
                 # plt.savefig(f'{plot_path}{sorted_names[station]}_{dmedia}km_{days_to_filter}dLoess.png')
 
                 # PLOT MAP OF DATA OBTAINED FROM EACH GAUGE!
-                fig, ax = plt.subplots(figsize=(10.5, 11), subplot_kw=dict(projection=ccrs.PlateCarree()))
+                # fig, ax = plt.subplots(figsize=(10.5, 11), subplot_kw=dict(projection=ccrs.PlateCarree()))
 
-                # Set the extent to focus on the defined lon-lat box
-                ax.set_extent(lolabox, crs=ccrs.PlateCarree())
+                # # Set the extent to focus on the defined lon-lat box
+                # ax.set_extent(lolabox, crs=ccrs.PlateCarree())
 
-                # Add scatter plot for specific locations
-                ax.scatter(tg_ts['longitude'][0], tg_ts['latitude'][0], c='black', marker='o', s=50, transform=ccrs.Geodetic(), label='Tide Gauge')
-                ax.scatter(swot_ts['swot_lon_within_radius'][0], swot_ts['swot_lat_within_radius'][0], c='blue', marker='o', s=50, transform=ccrs.Geodetic(), label='SWOT data')
+                # # Add scatter plot for specific locations
+                # ax.scatter(tg_ts['longitude'][0], tg_ts['latitude'][0], c='black', marker='o', s=50, transform=ccrs.Geodetic(), label='Tide Gauge')
+                # ax.scatter(swot_ts['swot_lon_within_radius'][0], swot_ts['swot_lat_within_radius'][0], c='blue', marker='o', s=50, transform=ccrs.Geodetic(), label='SWOT data')
 
-                # Add coastlines and gridlines
-                ax.coastlines()
-                ax.gridlines(draw_labels=True)
+                # # Add coastlines and gridlines
+                # ax.coastlines()
+                # ax.gridlines(draw_labels=True)
 
-                ax.legend(loc="upper left")
+                # ax.legend(loc="upper left")
                 # ax.title(f'Station {sorted_names[station]} taking radius of {dmedia} km')
 
 
@@ -493,14 +507,14 @@ for rad in dmedia:
                             'min_distance': min_distances
                             })
 
-    # Dropping wrong tide gauges (errors in tide gauge raw data)
-    drop_tg_names = ['station_GL_TS_TG_TamarisTG',
-                    'station_GL_TS_TG_BaieDuLazaretTG',
-                    'station_GL_TS_TG_PortDeCarroTG',
-                    'station_GL_TS_TG_CassisTG',
-                    'station_MO_TS_TG_PORTO-CRISTO']
+    # # Dropping wrong tide gauges (errors in tide gauge raw data)
+    # drop_tg_names = ['station_GL_TS_TG_TamarisTG',
+    #                 'station_GL_TS_TG_BaieDuLazaretTG',
+    #                 'station_GL_TS_TG_PortDeCarroTG',
+    #                 'station_GL_TS_TG_CassisTG',
+    #                 'station_MO_TS_TG_PORTO-CRISTO']
     
-    table = table_all[~table_all['station'].isin(drop_tg_names)].reset_index(drop=True)
+    # table = table_all[~table_all['station'].isin(drop_tg_names)].reset_index(drop=True)
 
     # table.to_excel(f'{path}SWOT-TG_comparisons/comparison_swot_tg_{dmedia}km.xlsx', index=False)
 
@@ -520,7 +534,7 @@ for rad in dmedia:
     # Step 4: Take the square root of the mean
     combined_rmsd = math.sqrt(mean_squared_rmsd)
 
-    results_rad_comparison.append({'radius': rad, 'rmsd': combined_rmsd, 'n_tg_used': len(table)})
+    results_rad_comparison.append({'radius': rad, 'rmsd': combined_rmsd, 'n_tg_used': len(table_all)})
 
     # results_rad_comparison.append({'radius': rad, 'rmsd': table['rmsd'].mean(), 'n_tg_used': len(table)})
     print(f'Radius: {rad} km processesed.')
