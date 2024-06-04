@@ -352,20 +352,31 @@ for rad in dmedia:
 
                 # Convert time column to numpy datetime64
                 ssh_swot_station['time'] = pd.to_datetime(ssh_swot_station['time'])
-
                 tg_station['time'] = pd.to_datetime(tg_station['time'])
 
-                # Cropping data (starting and ending of matching time series)
-                tg_start_date = np.datetime64(tg_station['time'].min())  # Start value of TG
-            
-                swot_end_date = np.datetime64(ssh_swot_station['time'].max())  # End value of SWOT
+                # Round SWOT time to nearest day
+                ssh_swot_station['time'] = ssh_swot_station['time'].dt.floor('d')
 
-                # swot_end_date = pd.Timestamp('2023-06-07')  # Convert to Timestamp for plotting
+                # Groupby date and take the mean of the SSHA values
+                ssh_swot_station = ssh_swot_station.groupby('time').mean().reset_index()
 
-                swot_ts = ssh_swot_station[(ssh_swot_station['time'] > tg_start_date) & (ssh_swot_station['time'] < swot_end_date)]
+                # Set time index
+                ssh_swot_station.set_index('time', inplace=True)
+                tg_station.set_index('time', inplace=True)
 
-                tg_ts = tg_station[(tg_station['time'] > tg_start_date) & (tg_station['time'] < swot_end_date)]
+                # Determine the overlapping period
+                start_date = max(ssh_swot_station.index.min(), tg_station.index.min())
+                end_date = min(ssh_swot_station.index.max(), tg_station.index.max())
+                
+                # Filter the time series to the overlapping period
+                swot_ts = ssh_swot_station[start_date:end_date]
+                tg_ts = tg_station[start_date:end_date]
 
+                # Retrieve the shared indexes between the two time series
+                shared_index = swot_ts.index.intersection(tg_ts.index)
+
+                swot_ts = swot_ts.loc[shared_index]
+                tg_ts = tg_ts.loc[shared_index]
 
                 # SUBSTRACT THE MEAN VALUE OF EACH TIME SERIE FOR COMPARING
                 tg_mean = tg_ts['ssha'].mean()
@@ -428,28 +439,28 @@ for rad in dmedia:
                 min_distances.append(swot_ts['min_distance'].min())
 
                 # PLOT SERIES TEMPORALES INCLUYENDO GAPS!
-                # plt.figure(figsize=(10, 6))
-                # plt.plot(swot_ts['time'], swot_ts[demean], label='SWOT', c='b', linewidth=3)
-                # plt.plot(swot_ts['time'], swot_ts['demean'], label='SWOT unfiltered', linestyle='--', c='b', alpha=0.6)
+                plt.figure(figsize=(10, 6))
+                plt.plot(swot_ts['time'], swot_ts[demean], label='SWOT', c='b', linewidth=3)
+                plt.plot(swot_ts['time'], swot_ts['demean'], label='SWOT unfiltered', linestyle='--', c='b', alpha=0.6)
 
-                # # plt.scatter(swot_ts['time'], swot_ts[demean])
-                # plt.plot(tg_ts['time'], tg_ts[demean], label='TGs', linewidth=3, c='g')
-                # plt.plot(tg_ts['time'], tg_ts['demean'], label='TGs unfiltered', linestyle='--', c='g', alpha=0.6)
+                # plt.scatter(swot_ts['time'], swot_ts[demean])
+                plt.plot(tg_ts['time'], tg_ts[demean], label='TGs', linewidth=3, c='g')
+                plt.plot(tg_ts['time'], tg_ts['demean'], label='TGs unfiltered', linestyle='--', c='g', alpha=0.6)
 
-                # plt.title(f'{sorted_names[station]}, {rad}km_radius, {day_window}dLoess, V1.0 SWOT')
-                # plt.legend()
-                # plt.xticks(rotation=20)
-                # plt.yticks(np.arange(-15, 18, 3))
-                # # plt.xlabel('time')
-                # plt.grid(True, alpha=0.2)
-                # plt.ylabel('SSHA (cm)')
-                # plt.tick_params(axis='both', which='major', labelsize=11)
-                # plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%m-%d'))  # Use '%m-%d' for MM-DD format
-                # plt.gca().xaxis.set_major_locator(mdates.DayLocator(interval=10))
+                plt.title(f'{sorted_names[station]}, {rad}km_radius, {day_window}dLoess, V1.0 SWOT')
+                plt.legend()
+                plt.xticks(rotation=20)
+                plt.yticks(np.arange(-15, 18, 3))
+                # plt.xlabel('time')
+                plt.grid(True, alpha=0.2)
+                plt.ylabel('SSHA (cm)')
+                plt.tick_params(axis='both', which='major', labelsize=11)
+                plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%m-%d'))  # Use '%m-%d' for MM-DD format
+                plt.gca().xaxis.set_major_locator(mdates.DayLocator(interval=10))
 
-                # plt.savefig(f'{plot_path}{sorted_names[station]}_{dmedia}km_{day_window}dLoess.png')
+                plt.savefig(f'{plot_path}{sorted_names[station]}_{dmedia}km_{day_window}dLoess.png')
 
-                # PLOT MAP OF DATA OBTAINED FROM EACH GAUGE!
+                # # PLOT MAP OF DATA OBTAINED FROM EACH GAUGE!
                 # fig, ax = plt.subplots(figsize=(10.5, 11), subplot_kw=dict(projection=ccrs.PlateCarree()))
 
                 # # Set the extent to focus on the defined lon-lat box
