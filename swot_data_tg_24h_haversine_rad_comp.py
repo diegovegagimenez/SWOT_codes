@@ -40,6 +40,8 @@ folder_path = (f'{path}swot_basic_1day/003_016_passv1.0/')  # Define SWOT passes
 data_tg = np.load(f'{path}mareografos/TGresiduals1d_2023_European_Seas_SWOT_FSP.npz')
 names_tg = pd.read_csv(f'{path}mareografos/GLOBAL_TGstations_CMEMS_SWOT_FSP_Feb2024', header=None)
 
+plot_path = f'{path}figures/radius_comparisons_rmsdCorrected_7dLoess_SWOT/'
+
 # Change format of names
 names_tg_short_sorted = pd.DataFrame({'Stations': ['Porquerolles', 'La_Capte', 'Les_Oursinieres', 'Saint_Louis_Mourillon',
                                             'Toulon', 'Baie_Du_Lazaret', 'Port_De_StElme', 'Tamaris', 'Bregaillon',
@@ -122,7 +124,7 @@ data_arrays = ordered_data_arrays
 strategy = 0
 
 # Radius in km for averaging nearby points
-dmedia = np.arange(10, 45, 5)
+dmedia = np.arange(10, 65, 5)
 
 # Loop through all netCDF files in the folder
 nc_files = [f for f in os.listdir(folder_path) if f.endswith('.nc')]
@@ -131,7 +133,6 @@ results_rad_comparison = []
 
 for rad in dmedia:
     print(f'Beggining processing radius {rad} km')
-    print(f'{sorted_names}')
     # List to store all SWOT time series
     all_swot_timeseries = []
 
@@ -359,6 +360,8 @@ for rad in dmedia:
             
                 swot_end_date = np.datetime64(ssh_swot_station['time'].max())  # End value of SWOT
 
+                # swot_end_date = pd.Timestamp('2023-06-07')  # Convert to Timestamp for plotting
+
                 swot_ts = ssh_swot_station[(ssh_swot_station['time'] > tg_start_date) & (ssh_swot_station['time'] < swot_end_date)]
 
                 tg_ts = tg_station[(tg_station['time'] > tg_start_date) & (tg_station['time'] < swot_end_date)]
@@ -433,7 +436,7 @@ for rad in dmedia:
                 # plt.plot(tg_ts['time'], tg_ts[demean], label='TGs', linewidth=3, c='g')
                 # plt.plot(tg_ts['time'], tg_ts['demean'], label='TGs unfiltered', linestyle='--', c='g', alpha=0.6)
 
-                # plt.title(f'Station {sorted_names[station]} using radius of {rad}km, {day_window}dLoess, V1.0 SWOT')
+                # plt.title(f'{sorted_names[station]}, {rad}km_radius, {day_window}dLoess, V1.0 SWOT')
                 # plt.legend()
                 # plt.xticks(rotation=20)
                 # plt.yticks(np.arange(-15, 18, 3))
@@ -444,7 +447,7 @@ for rad in dmedia:
                 # plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%m-%d'))  # Use '%m-%d' for MM-DD format
                 # plt.gca().xaxis.set_major_locator(mdates.DayLocator(interval=10))
 
-                # plt.savefig(f'{plot_path}{sorted_names[station]}_{dmedia}km_{days_to_filter}dLoess.png')
+                # plt.savefig(f'{plot_path}{sorted_names[station]}_{dmedia}km_{day_window}dLoess.png')
 
                 # PLOT MAP OF DATA OBTAINED FROM EACH GAUGE!
                 # fig, ax = plt.subplots(figsize=(10.5, 11), subplot_kw=dict(projection=ccrs.PlateCarree()))
