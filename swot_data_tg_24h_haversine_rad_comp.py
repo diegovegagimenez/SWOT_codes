@@ -14,6 +14,16 @@ import warnings
 # Set the warning filter to "ignore" to suppress all warnings
 warnings.filterwarnings("ignore")
 
+# ---------------------------------- PARAMETERS ----------------------------------------------------------------------
+# Choose strategy for obtaining SWOT time series around tide gauge locations
+# 0: Average nearby points (within radius)
+# 1: Retrieve closest non-NaN value (within radius)
+strategy = 0
+
+dmedia = np.arange(10, 65, 5)  # Radius in km for averaging nearby points
+
+day_window = 7  # Define the window size for the LOESS filter
+
 
 # Function for calculating the Haversine distance between two points
 def haversine(lon1, lat1, lon2, lat2):
@@ -118,13 +128,6 @@ for name in sorted_names:
 data_arrays = ordered_data_arrays
 
 # ------------------------ PROCESSING SWOT DATA AROUND TG LOCATIONS --------------------------------------------------
-# Choose strategy for handling missing data (average nearby points or closest non-NaN)
-# 0: Average nearby points (within radius)
-# 1: Retrieve closest non-NaN value (within radius)
-strategy = 0
-
-# Radius in km for averaging nearby points
-dmedia = np.arange(10, 65, 5)
 
 # Loop through all netCDF files in the folder
 nc_files = [f for f in os.listdir(folder_path) if f.endswith('.nc')]
@@ -245,7 +248,6 @@ for rad in dmedia:
                     'station_MO_TS_TG_PORTO-CRISTO']
     
     df = df[~df['station_name'].isin(drop_tg_names)].reset_index(drop=True)
-
 
 
     # Dataframe to store SWOT time series data for each TG station
@@ -394,7 +396,7 @@ for rad in dmedia:
                 if len(swot_ts) != 0: #---------------------------------------------------------------------------------------------
 
                     # Filter noise using LOESS filter
-                    day_window = 7
+
                     # frac_lowess = day_window / len(cmems_ts)  #  10 days window
                     frac_loess = 1 / day_window #  7 days window    fc = 1/Scale
 
@@ -548,7 +550,7 @@ for rad in dmedia:
     # Step 4: Take the square root of the mean
     combined_rmsd = math.sqrt(mean_squared_rmsd)
 
-    results_rad_comparison.append({'radius': rad, 'rmsd': combined_rmsd, 'n_tg_used': len(table_all)})
+    results_rad_comparison.append({'radius': rad, 'rmsd': combined_rmsd, 'n_tg_used': len(table_all), 'avg_days_used': np.mean(days_used_per_gauge)})
 
     # results_rad_comparison.append({'radius': rad, 'rmsd': table['rmsd'].mean(), 'n_tg_used': len(table)})
     print(f'Radius: {rad} km processesed.')
