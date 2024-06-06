@@ -33,8 +33,10 @@ def haversine(lon1, lat1, lon2, lat2):
 path ='/home/dvega/anaconda3/work/SWOT/'
 
 cmems_path = f'{path}CMEMS_data/SEALEVEL_EUR_PHY_L4_NRT_008_060/daily'
-# cmems_path = f'{path}CMEMS_data/cmems_obs-sl_eur_phy-ssh_my_allsat-l4-duacs-0.125deg_P1D'
+plot_path = f'{path}figures/radius_comparisons_rmsdCorrected_7dLoess_CMEMS_NRT/'
 
+cmems_path = f'{path}CMEMS_data/cmems_obs-sl_eur_phy-ssh_my_allsat-l4-duacs-0.125deg_P1D'
+plot_path = f'{path}figures/radius_comparisons_rmsdCorrected_7dLoess_CMEMS_reprocessed/'
 
 data_tg = np.load(f'{path}mareografos/TGresiduals1d_2023_European_Seas_SWOT_FSP.npz')
 names_tg = pd.read_csv(f'{path}mareografos/GLOBAL_TGstations_CMEMS_SWOT_FSP_Feb2024', header=None)
@@ -110,7 +112,7 @@ results_rad_comparison = []  # List to store results for each radius
 
 # Maximum distance from each CMEMS point to the tide gauge location
 
-dmedia = np.arange(5, 20, 5)  # Array of distances from 5 to 110 km in 5 km increments
+dmedia = np.arange(10, 45, 5)  # Array of distances from 5 to 110 km in 5 km increments
 
 # Loop through all netCDF files in the folder
 nc_files = [f for f in os.listdir(cmems_path) if f.endswith('.nc')]
@@ -126,7 +128,6 @@ for rad in dmedia:
         ds_all = xr.open_dataset(file_path)
 
         # Select all latitudes and the last 370 longitudes
-        # ds_subset = ds.sel(longitude=slice(-370, None))
         ds = ds_all.sel(latitude=slice(lolabox[2], lolabox[3]), longitude=slice(lolabox[0], lolabox[1]))
 
         time = ds['time'].values
@@ -249,6 +250,15 @@ for rad in dmedia:
     # CONVERT TO DATAFRAME for easier managing
     df = pd.DataFrame(all_cmems_timeseries).dropna(how='any')  # Convert to DataFrame
 
+    # # Dropping wrong tide gauges (errors in tide gauge raw data)
+    drop_tg_names = ['station_GL_TS_TG_TamarisTG',
+                    'station_GL_TS_TG_BaieDuLazaretTG',
+                    'station_GL_TS_TG_PortDeCarroTG',
+                    'station_GL_TS_TG_CassisTG',
+                    'station_MO_TS_TG_PORTO-CRISTO']
+    
+    df = df[~df['station_name'].isin(drop_tg_names)].reset_index(drop=True)
+
     # Convert from Series of ndarrays containing dates to Series of timestamps
     df['time'] = df['time'].apply(lambda x: x[0])
 
@@ -303,14 +313,23 @@ for rad in dmedia:
 
             tg_station['time'] = pd.to_datetime(tg_station['time'])
 
-            # Cropping data (starting and ending of matching time series)
-            tg_start_date = np.datetime64(tg_station['time'].min())  # Start value of TG
-            tg_end_date = np.datetime64(tg_station['time'].max())  # End value of CMEMS
+            # Set time index
+            ssh_cmems_station.set_index('time', inplace=True)
+            tg_station.set_index('time', inplace=True)
 
-            cmems_ts = ssh_cmems_station[
-                (ssh_cmems_station['time'] > tg_start_date) & (ssh_cmems_station['time'] < tg_end_date)]
+            # Determine the overlapping period
+            start_date = max(ssh_cmems_station.index.min(), tg_station.index.min())
+            end_date = min(ssh_cmems_station.index.max(), tg_station.index.max())
+            
+            # Filter the time series to the overlapping period
+            cmems_ts = ssh_cmems_station[start_date:end_date]
+            tg_ts = tg_station[start_date:end_date]
 
-            tg_ts = tg_station[(tg_station['time'] > tg_start_date) & (tg_station['time'] < tg_end_date)]
+            # Retrieve the shared indexes between the two time series
+            shared_index = cmems_ts.index.intersection(tg_ts.index)
+
+            swot_ts = cmems_ts.loc[shared_index]
+            tg_ts = tg_ts.loc[shared_index]
 
             # SUBSTRACT THE MEAN VALUE OF EACH TIME SERIE FOR COMPARING
             tg_mean = tg_ts['ssha'].mean()
@@ -369,35 +388,42 @@ for rad in dmedia:
             days_used_per_gauge.append(len(cmems_ts))
 
             # PLOTTING TIME SERIES
-            plt.figure(figsize=(10, 6))
-            plt.plot(cmems_ts['time'], cmems_ts[demean], label='CMEMS data')
-            plt.scatter(cmems_ts['time'], cmems_ts[demean])
-            plt.plot(tg_ts['time'], tg_ts[demean], label='Tide Gauge Data')
-            plt.scatter(tg_ts['time'], tg_ts[demean])
-            plt.title(f'Station {sorted_names[station]} using {rad} km radius')
-            plt.legend()
-            plt.xticks(rotation=20)
-            # plt.xlabel('time')
-            plt.grid(True, alpha=0.2)
-            plt.ylabel('SSHA (m)')
-            plt.tick_params(axis='both', which='major', labelsize=11)
+            # plt.figure(figsize=(10, 6))
+            # plt.plot(cmems_ts['time'], cmems_ts[demean], label='CMEMS',  linewidth=5, c='b')
+            # plt.plot(cmems_ts['time'], cmems_ts['demean'], label='CMEMS unfiltered', linestyle='--', c='b', alpha=0.5)
+
+            # # plt.scatter(cmems_ts['time'], cmems_ts[demean])
+            # plt.plot(tg_ts['time'], tg_ts[demean], label='TGs',  linewidth=5, c='g')
+            # plt.plot(tg_ts['time'], tg_ts['demean'], label='TGs unfiltered', linestyle='--', c='g', alpha=0.5)
+
+            # # plt.scatter(tg_ts['time'], tg_ts[demean])
+            # plt.title(f'{sorted_names[station]}, {rad}km_radius, {day_window}dLoess, CMEMS_NRT')
+            # plt.legend()
+            # plt.xticks(rotation=20)
+            # # plt.xlabel('time')
+            # plt.grid(True, alpha=0.2)
+            # plt.ylabel('SSHA (m)')
+            # plt.tick_params(axis='both', which='major', labelsize=11)
+
+            # plt.savefig(f'{plot_path}{sorted_names[station]}_{rad}km_{day_window}dLoess_CMEMS_reprocessed.png')
+
 
             # MAP PLOT OF CMEMS LOCATIONS OBTAINED FROM EACH GAUGE!
-            fig, ax = plt.subplots(figsize=(10.5, 11), subplot_kw=dict(projection=ccrs.PlateCarree()))
+            # fig, ax = plt.subplots(figsize=(10.5, 11), subplot_kw=dict(projection=ccrs.PlateCarree()))
 
-            # Set the extent to focus on the defined lon-lat box
-            ax.set_extent(lolabox, crs=ccrs.PlateCarree())
+            # # Set the extent to focus on the defined lon-lat box
+            # ax.set_extent(lolabox, crs=ccrs.PlateCarree())
 
-            # Add scatter plot for specific locations
-            ax.scatter(tg_ts['longitude'][0], tg_ts['latitude'][0], c='black', marker='o', s=50, transform=ccrs.Geodetic(), label='Tide Gauge')
-            ax.scatter(cmems_ts['cmems_lon_within_radius'][0], cmems_ts['cmems_lat_within_radius'][0], c='blue', marker='o', s=50, transform=ccrs.Geodetic(), label='CMEMS data')
+            # # Add scatter plot for specific locations
+            # ax.scatter(tg_ts['longitude'][0], tg_ts['latitude'][0], c='black', marker='o', s=50, transform=ccrs.Geodetic(), label='Tide Gauge')
+            # ax.scatter(cmems_ts['cmems_lon_within_radius'][0], cmems_ts['cmems_lat_within_radius'][0], c='blue', marker='o', s=50, transform=ccrs.Geodetic(), label='CMEMS data')
 
-            # Add coastlines and gridlines
-            ax.coastlines()
-            ax.gridlines(draw_labels=True)
+            # # Add coastlines and gridlines
+            # ax.coastlines()
+            # ax.gridlines(draw_labels=True)
 
-            ax.legend(loc="upper left")
-            # ax.title(f'Station {sorted_names[station]}')
+            # ax.legend(loc="upper left")
+            # # ax.title(f'Station {sorted_names[station]}')
 
         except (KeyError, ValueError):  # Handle cases where station might not exist in df or time has NaNs
             # Print message or log the issue and save the station index for dropping the empty stations
@@ -440,14 +466,14 @@ for rad in dmedia:
                             'longitude': ordered_lon_mod
                             })
 
-    # Dropping wrong tide gauges (errors in tide gauge raw data)
-    drop_tg_names = ['station_GL_TS_TG_TamarisTG',
-                    'station_GL_TS_TG_BaieDuLazaretTG',
-                    'station_GL_TS_TG_PortDeCarroTG',
-                    'station_GL_TS_TG_CassisTG',
-                    'station_MO_TS_TG_PORTO-CRISTO']
+    # # Dropping wrong tide gauges (errors in tide gauge raw data)
+    # drop_tg_names = ['station_GL_TS_TG_TamarisTG',
+    #                 'station_GL_TS_TG_BaieDuLazaretTG',
+    #                 'station_GL_TS_TG_PortDeCarroTG',
+    #                 'station_GL_TS_TG_CassisTG',
+    #                 'station_MO_TS_TG_PORTO-CRISTO']
     
-    table = table_all[~table_all['station'].isin(drop_tg_names)].reset_index(drop=True)
+    # table = table_all[~table_all['station'].isin(drop_tg_names)].reset_index(drop=True)
 
     # Average RMSD values taking in account the non-linear behaviour of the RMSD
     # Delete the wrong rows/tgs from rmsds
@@ -462,8 +488,18 @@ for rad in dmedia:
     # Step 3: Take the square root of the mean
     combined_rmsd = math.sqrt(mean_squared_rmsd)
 
-    results_rad_comparison.append({'radius': rad, 'rmsd': combined_rmsd, 'n_tg_used': len(table['rmsd'].dropna())})
+    results_rad_comparison.append({'radius': rad, 'rmsd': combined_rmsd, 'rmsd_simply_averaged':np.mean(rmsds), 'n_tg_used': len(table_all['rmsd'].dropna())})
 
 results_df = pd.DataFrame(results_rad_comparison)
 
 results_df
+
+
+# plt.plot(results_df_SWOT['radius'], results_df_SWOT['rmsd'])
+# plt.plot(results_df_NRT['radius'], results_df_NRT['rmsd'])
+# plt.plot(results_df_reprocessed['radius'], results_df_reprocessed['rmsd'])
+# plt.xlabel('Radius (km)')
+# plt.ylabel('RMSD (cm)')
+# plt.legend(['SWOT', 'NRT', 'Reprocessed'])
+# plt.title('RMSD vs Radius')
+# plt.grid(True, alpha = 0.4)
