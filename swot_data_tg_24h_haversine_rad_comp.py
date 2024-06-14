@@ -550,6 +550,101 @@ for rad in dmedia:
     # Step 4: Take the square root of the mean
     combined_rmsd = math.sqrt(mean_squared_rmsd)
 
+
+
+# PLOTTING TIME SERIES OF SWOT AND TGs WITH TEXT
+# plt.figure(figsize=(10, 6))
+# plt.plot(swot_ts['time'], swot_ts[demean], label='SWOT', c='b', linewidth=3)
+# plt.plot(swot_ts['time'], swot_ts['demean'], label='SWOT unfiltered', linestyle='--', c='b', alpha=0.6)
+
+# # plt.scatter(swot_ts['time'], swot_ts[demean])
+# plt.plot(tg_ts['time'], tg_ts[demean], label='TGs', linewidth=3, c='g')
+# plt.plot(tg_ts['time'], tg_ts['demean'], label='TGs unfiltered', linestyle='--', c='g', alpha=0.6)
+
+# plt.title(f'{sorted_names[station]}, {rad}km_radius, {day_window}dLoess, V1.0 SWOT (L3)')
+# plt.legend()
+# plt.xticks(rotation=20)
+# plt.yticks(np.arange(-15, 18, 3))
+# # plt.xlabel('time')
+# plt.grid(True, alpha=0.3)
+# plt.ylabel('SSHA (cm)')
+# plt.tick_params(axis='both', which='major', labelsize=11)
+# plt.text(0.95, 0.1, f'RMSD: {rmsd:.2f} cm', fontsize=12, color='black', 
+#          transform=plt.gca().transAxes, ha='right', bbox=dict(facecolor='white', alpha=0.5))
+# plt.text(0.95, 0.2, f'CORRELATION: {correlation:.2f}', fontsize=12, color='black', 
+#          transform=plt.gca().transAxes, ha='right', bbox=dict(facecolor='white', alpha=0.5))
+
+
+# PLOTTING MAP WITH TIDE GAUGE LOCATIONS AND SWOT FOOTPRINTS
+# fig, ax = plt.subplots(figsize=(10.5, 11), subplot_kw=dict(projection=ccrs.PlateCarree()))
+# lolabox = [0, 7, 36, 44]
+# # Set the extent to focus on the defined lon-lat box
+# ax.set_extent(lolabox, crs=ccrs.PlateCarree())
+
+# # Add scatter plot for specific locations
+# ax.scatter(tg_ts['longitude'][0], tg_ts['latitude'][0], c='g', marker='o', s=120, transform=ccrs.Geodetic(), label='Tide Gauge Tarragona', zorder=2)
+
+# ax.scatter(df_tg['longitude'][:-1], df_tg['latitude'][:-1], c='black', marker='o', s=40, transform=ccrs.Geodetic(), label='Other tide gauges', zorder=1)
+
+# # Add coastlines and gridlines
+# ax.coastlines()
+# ax.gridlines(draw_labels=True)
+# ax.add_feature(cfeature.LAND, edgecolor='black', facecolor='grey')  # Set land color to grey
+
+# ax.legend(loc="upper left")
+
+# # lolabox = [4, 7, 42.5, 43.75]  # [west, east, south, north]  # For france locations
+
+
+# # Define the start and end points for the two parallel lines
+
+# # pass 003
+# line1_start_point = (4.67, 43.33)  # Replace lon_start1 and lat_start1 with your desired coordinates
+# line2_start_point = (5.33, 43.23)  # Replace lon_end1 and lat_end1 with your desired coordinates
+# line3_start_point = (5.51, 43.19)  # Replace lon_start2 and lat_start2 with your desired coordinates
+# line4_start_point = (6.13, 43)  # Replace lon_end2 and lat_end2 with your desired coordinates
+# line1_end_point = (2.71, 36.71)
+# line2_end_point = (3.38, 36.81)
+# line3_end_point = (3.57, 36.84)
+# line4_end_point = (4.19, 36.91)
+
+# # pass 016
+# line1b_start_point = (2.26, 41.417)  # Replace lon_start1 and lat_start1 with your desired coordinates
+# line2b_start_point = (1.698, 41.198)  # Replace lon_end1 and lat_end1 with your desired coordinates
+# line3b_start_point = (1.49, 41.15)  # Replace lon_start2 and lat_start2 with your desired coordinates
+# line4b_start_point = (0.95, 40.98)  # Replace lon_end2 and lat_end2 with your desired coordinates
+# line4b_end_point = (2.23, 36.62)
+# line3b_end_point = (2.81, 36.7)
+# line2b_end_point = (2.97, 36.818)
+# line1b_end_point = (3.57, 36.817)
+
+# # Create LineString objects for the two parallel lines
+# line1 = LineString([line1_start_point, line1_end_point])
+# line2 = LineString([line2_start_point, line2_end_point])
+# line3 = LineString([line3_start_point, line3_end_point])
+# line4 = LineString([line4_start_point, line4_end_point])
+# line5 = LineString([line1b_start_point, line1b_end_point])
+# line6 = LineString([line2b_start_point, line2b_end_point])
+# line7 = LineString([line3b_start_point, line3b_end_point])
+# line8 = LineString([line4b_start_point, line4b_end_point])
+
+# # Add coastlines and gridlines
+# ax.coastlines()
+# ax.gridlines(draw_labels=True)
+
+# # Plot the parallel lines
+# ax.plot(*line1.xy, color='blue', transform=ccrs.PlateCarree(), linestyle='--', label = "SWOT footprints")
+# ax.plot(*line2.xy, color='blue', transform=ccrs.PlateCarree(), linestyle='--')
+# ax.plot(*line3.xy, color='blue', transform=ccrs.PlateCarree(), linestyle='--')
+# ax.plot(*line4.xy, color='blue', transform=ccrs.PlateCarree(), linestyle='--')
+# ax.plot(*line5.xy, color='blue', transform=ccrs.PlateCarree(), linestyle='--')
+# ax.plot(*line6.xy, color='blue', transform=ccrs.PlateCarree(), linestyle='--')
+# ax.plot(*line7.xy, color='blue', transform=ccrs.PlateCarree(), linestyle='--')
+# ax.plot(*line8.xy, color='blue', transform=ccrs.PlateCarree(), linestyle='--')
+# # Optionally, add a legend
+# ax.legend(loc="upper left")
+# plt.show()
+
     results_rad_comparison.append({'radius': rad, 'rmsd': combined_rmsd, 'n_tg_used': len(table_all), 'avg_days_used': np.mean(days_used_per_gauge)})
 
     # results_rad_comparison.append({'radius': rad, 'rmsd': table['rmsd'].mean(), 'n_tg_used': len(table)})
