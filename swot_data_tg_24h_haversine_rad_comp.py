@@ -5,24 +5,16 @@ import pandas as pd
 import os
 import math
 import cartopy.crs as ccrs
+import cartopy.feature as cfeature
 from shapely.geometry import LineString
 import cartopy.feature as cfeature
 import statsmodels.api as sm  # for LOWESS filter
 import loess_smooth_handmade as loess  # for LOESS filter
 import matplotlib.dates as mdates
 import warnings
+import netCDF4 as nc
 # Set the warning filter to "ignore" to suppress all warnings
 warnings.filterwarnings("ignore")
-
-# ---------------------------------- PARAMETERS ----------------------------------------------------------------------
-# Choose strategy for obtaining SWOT time series around tide gauge locations
-# 0: Average nearby points (within radius)
-# 1: Retrieve closest non-NaN value (within radius)
-strategy = 0
-
-dmedia = np.arange(10, 65, 5)  # Radius in km for averaging nearby points
-
-day_window = 7  # Define the window size for the LOESS filter
 
 
 # Function for calculating the Haversine distance between two points
@@ -44,11 +36,37 @@ def haversine(lon1, lat1, lon2, lat2):
 
 path ='/home/dvega/anaconda3/work/SWOT/'
 
+# SWOT data path -----------------------------------------------------------------------------------------------
 # folder_path = (f'{path}swot_basic_1day/003_016_pass/')  # Define SWOT passes folders
 folder_path = (f'{path}swot_basic_1day/003_016_passv1.0/')  # Define SWOT passes folders
 
 data_tg = np.load(f'{path}mareografos/TGresiduals1d_2023_European_Seas_SWOT_FSP.npz')
 names_tg = pd.read_csv(f'{path}mareografos/GLOBAL_TGstations_CMEMS_SWOT_FSP_Feb2024', header=None)
+
+# Data of SWOT footprints ----------------------------------------------------------------------------------------
+footprint_folder = f'{path}swot_orbit/'
+footprint_003 = nc.Dataset(f'{footprint_folder}MED_fastPhase_1km_swotFAST_grid_p009.nc', decode_times=False)
+footprint_016 = nc.Dataset(f'{footprint_folder}MED_fastPhase_1km_swotFAST_grid_p022.nc', decode_times=False)
+
+latsw1  = footprint_003.variables['lat'][:]   
+lonsw1  = footprint_003.variables['lon'][:]  
+x_ac1   = footprint_003.variables['x_ac'][:]  # "Across track distance from nadir"
+lonnd1  = footprint_003.variables['lon_nadir'][:] 
+latnd1  = footprint_003.variables['lat_nadir'][:] 
+footprint_003.close()     
+
+latsw2  = footprint_016.variables['lat'][:]   
+lonsw2  = footprint_016.variables['lon'][:]  
+x_ac2   = footprint_016.variables['x_ac'][:]  # "Across track distance from nadir"
+
+lonnd2  = footprint_016.variables['lon_nadir'][:] 
+latnd2  = footprint_016.variables['lat_nadir'][:]     
+
+color="lightsteelblue"
+alphav=0.1
+
+# ------------------------------------------------------------------------------------------------------------
+
 
 plot_path = f'{path}figures/radius_comparisons_rmsdCorrected_7dLoess_SWOT/'
 
@@ -128,6 +146,13 @@ for name in sorted_names:
 data_arrays = ordered_data_arrays
 
 # ------------------------ PROCESSING SWOT DATA AROUND TG LOCATIONS --------------------------------------------------
+# Choose strategy for handling missing data (average nearby points or closest non-NaN)
+# 0: Average nearby points (within radius)
+# 1: Retrieve closest non-NaN value (within radius)
+strategy = 0
+
+# Radius in km for averaging nearby points
+dmedia = np.arange(30, 35, 5)
 
 # Loop through all netCDF files in the folder
 nc_files = [f for f in os.listdir(folder_path) if f.endswith('.nc')]
@@ -149,7 +174,7 @@ for rad in dmedia:
         lon = ds['longitude'].values.flatten()
         lat = ds['latitude'].values.flatten()
         ssh = ds['ssha_noiseless'].values.flatten()
-        # ssh = ds['ssha'].values.flatten()
+        ssh = ds['ssha'].values.flatten()
 
         time_values = ds['time'].values  # Adding a new
         time = np.tile(time_values[:, np.newaxis], (1, 69)).flatten()  # Not efficient
@@ -248,6 +273,7 @@ for rad in dmedia:
                     'station_MO_TS_TG_PORTO-CRISTO']
     
     df = df[~df['station_name'].isin(drop_tg_names)].reset_index(drop=True)
+
 
 
     # Dataframe to store SWOT time series data for each TG station
@@ -396,19 +422,19 @@ for rad in dmedia:
                 if len(swot_ts) != 0: #---------------------------------------------------------------------------------------------
 
                     # Filter noise using LOESS filter
-
+                    day_window = 7
                     # frac_lowess = day_window / len(cmems_ts)  #  10 days window
                     frac_loess = 1 / day_window #  7 days window    fc = 1/Scale
 
                     # SWOT
                     # filt_lowess = sm.nonparametric.lowess(swot_ts['demean'], swot_ts['time'], frac=frac_lowess, return_sorted=False)
-                    filt_loess = loess.loess_smooth_handmade(swot_ts['demean'].values, frac_loess)
-                    swot_ts['demean_filtered'] = filt_loess
+                    filt_loess_swot = loess.loess_smooth_handmade(swot_ts['demean'].values, frac_loess)
+                    swot_ts['demean_filtered'] = filt_loess_swot
 
                     # TGs
                     # filt_lowess = sm.nonparametric.lowess(tg_ts['demean'], tg_ts['time'], frac=frac_lowess, return_sorted=False)
-                    filt_loess = loess.loess_smooth_handmade(tg_ts['demean'].values, frac_loess)
-                    tg_ts['demean_filtered'] = filt_loess
+                    filt_loess_tg = loess.loess_smooth_handmade(tg_ts['demean'].values, frac_loess)
+                    tg_ts['demean_filtered'] = filt_loess_tg
 
                 else:
                     empty_stations.append(station)
@@ -441,26 +467,27 @@ for rad in dmedia:
                 min_distances.append(swot_ts['min_distance'].min())
 
                 # PLOT SERIES TEMPORALES INCLUYENDO GAPS!
-                plt.figure(figsize=(10, 6))
-                plt.plot(swot_ts['time'], swot_ts[demean], label='SWOT', c='b', linewidth=3)
-                plt.plot(swot_ts['time'], swot_ts['demean'], label='SWOT unfiltered', linestyle='--', c='b', alpha=0.6)
+                # plt.figure(figsize=(10, 6))
+                # plt.plot(swot_ts['time'], swot_ts[demean], label='SWOT', c='b', linewidth=3)
+                # plt.plot(swot_ts['time'], swot_ts['demean'], label='SWOT unfiltered', linestyle='--', c='b', alpha=0.6)
 
-                # plt.scatter(swot_ts['time'], swot_ts[demean])
-                plt.plot(tg_ts['time'], tg_ts[demean], label='TGs', linewidth=3, c='g')
-                plt.plot(tg_ts['time'], tg_ts['demean'], label='TGs unfiltered', linestyle='--', c='g', alpha=0.6)
+                # # plt.scatter(swot_ts['time'], swot_ts[demean])
+                # plt.plot(tg_ts['time'], tg_ts[demean], label='TGs', linewidth=3, c='g')
+                # plt.plot(tg_ts['time'], tg_ts['demean'], label='TGs unfiltered', linestyle='--', c='g', alpha=0.6)
 
-                plt.title(f'{sorted_names[station]}, {rad}km_radius, {day_window}dLoess, V1.0 SWOT')
-                plt.legend()
-                plt.xticks(rotation=20)
-                plt.yticks(np.arange(-15, 18, 3))
+                # plt.title(f'{sorted_names[station]}, {rad}km_radius, {day_window}dLoess, V1.0 SWOT (L3)')
+                # plt.legend()
+                # plt.xticks(rotation=20)
+                # plt.yticks(np.arange(-15, 18, 3))
                 # plt.xlabel('time')
-                plt.grid(True, alpha=0.2)
-                plt.ylabel('SSHA (cm)')
-                plt.tick_params(axis='both', which='major', labelsize=11)
-                plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%m-%d'))  # Use '%m-%d' for MM-DD format
-                plt.gca().xaxis.set_major_locator(mdates.DayLocator(interval=10))
 
-                plt.savefig(f'{plot_path}{sorted_names[station]}_{dmedia}km_{day_window}dLoess.png')
+                # plt.grid(True, alpha=0.2)
+                # plt.ylabel('SSHA (cm)')
+                # plt.tick_params(axis='both', which='major', labelsize=11)
+                # plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%m-%d'))  # Use '%m-%d' for MM-DD format
+                # plt.gca().xaxis.set_major_locator(mdates.DayLocator(interval=10))
+
+                # plt.savefig(f'{plot_path}{sorted_names[station]}_{rad}km_{day_window}dLoess.png')
 
                 # # PLOT MAP OF DATA OBTAINED FROM EACH GAUGE!
                 # fig, ax = plt.subplots(figsize=(10.5, 11), subplot_kw=dict(projection=ccrs.PlateCarree()))
@@ -478,6 +505,8 @@ for rad in dmedia:
 
                 # ax.legend(loc="upper left")
                 # ax.title(f'Station {sorted_names[station]} taking radius of {dmedia} km')
+
+
 
 
         except (KeyError, ValueError):  # Handle cases where station might not exist in df or time has NaNs
@@ -523,16 +552,6 @@ for rad in dmedia:
                             'min_distance': min_distances
                             })
 
-    # # Dropping wrong tide gauges (errors in tide gauge raw data)
-    # drop_tg_names = ['station_GL_TS_TG_TamarisTG',
-    #                 'station_GL_TS_TG_BaieDuLazaretTG',
-    #                 'station_GL_TS_TG_PortDeCarroTG',
-    #                 'station_GL_TS_TG_CassisTG',
-    #                 'station_MO_TS_TG_PORTO-CRISTO']
-    
-    # table = table_all[~table_all['station'].isin(drop_tg_names)].reset_index(drop=True)
-
-    # table.to_excel(f'{path}SWOT-TG_comparisons/comparison_swot_tg_{dmedia}km.xlsx', index=False)
 
     # Average RMSD values taking in account the non-linear behaviour of the RMSD
     # Delete the wrong rows/tgs from rmsds
@@ -550,6 +569,13 @@ for rad in dmedia:
     # Step 4: Take the square root of the mean
     combined_rmsd = math.sqrt(mean_squared_rmsd)
 
+    results_rad_comparison.append({'radius': rad, 'rmsd': combined_rmsd, 'n_tg_used': len(table_all), 'avg_days_used':np.mean(days_used_per_gauge)})
+
+    # results_rad_comparison.append({'radius': rad, 'rmsd': table['rmsd'].mean(), 'n_tg_used': len(table)})
+    print(f'Radius: {rad} km processesed.')
+
+results_df = pd.DataFrame(results_rad_comparison)
+results_df
 
 
 # PLOTTING TIME SERIES OF SWOT AND TGs WITH TEXT
@@ -576,24 +602,32 @@ for rad in dmedia:
 
 
 # PLOTTING MAP WITH TIDE GAUGE LOCATIONS AND SWOT FOOTPRINTS
-# fig, ax = plt.subplots(figsize=(10.5, 11), subplot_kw=dict(projection=ccrs.PlateCarree()))
-# lolabox = [0, 7, 36, 44]
-# # Set the extent to focus on the defined lon-lat box
-# ax.set_extent(lolabox, crs=ccrs.PlateCarree())
+fig, ax = plt.subplots(figsize=(10.5, 11), subplot_kw=dict(projection=ccrs.PlateCarree()))
+lolabox = [0, 7, 36, 44]
+# Set the extent to focus on the defined lon-lat box
+ax.set_extent(lolabox, crs=ccrs.PlateCarree())
 
-# # Add scatter plot for specific locations
-# ax.scatter(tg_ts['longitude'][0], tg_ts['latitude'][0], c='g', marker='o', s=120, transform=ccrs.Geodetic(), label='Tide Gauge Tarragona', zorder=2)
+# Add scatter plot for specific locations
+ax.scatter(tg_ts['longitude'][0], tg_ts['latitude'][0], c='g', marker='o', s=120, transform=ccrs.Geodetic(), label='Tide Gauge Tarragona', zorder=3)
 
-# ax.scatter(df_tg['longitude'][:-1], df_tg['latitude'][:-1], c='black', marker='o', s=40, transform=ccrs.Geodetic(), label='Other tide gauges', zorder=1)
+ax.scatter(df_tg['longitude'][:-1], df_tg['latitude'][:-1], c='black', marker='o', s=40, transform=ccrs.Geodetic(), label='Other tide gauges', zorder=2)
 
-# # Add coastlines and gridlines
-# ax.coastlines()
-# ax.gridlines(draw_labels=True)
-# ax.add_feature(cfeature.LAND, edgecolor='black', facecolor='grey')  # Set land color to grey
+# Plot SWOT footprints for pass 003
+ax.scatter(lonsw1.flatten(), latsw1.flatten(), c=color, s=0.5, alpha=alphav, zorder = 0,transform=ccrs.PlateCarree())
+ax.scatter(lonsw2.flatten(), latsw2.flatten(), c=color, s=0.5, alpha=alphav, zorder = 0,transform=ccrs.PlateCarree())
+ax.scatter(lonnd1.flatten(), latnd1.flatten(), c=color, s=0.5, alpha=alphav, zorder = 0,transform=ccrs.PlateCarree())
+ax.scatter(lonnd2.flatten(), latnd2.flatten(), c=color, s=0.5, alpha=alphav, zorder = 0,transform=ccrs.PlateCarree())
 
-# ax.legend(loc="upper left")
+# Add coastlines and gridlines
+ax.coastlines()
+ax.gridlines(draw_labels=True)
+ax.add_feature(cfeature.LAND, edgecolor='black', facecolor='grey', zorder=1)  # Set land color to grey
 
-# # lolabox = [4, 7, 42.5, 43.75]  # [west, east, south, north]  # For france locations
+ax.legend(loc="upper left")
+
+
+
+# lolabox = [4, 7, 42.5, 43.75]  # [west, east, south, north]  # For france locations
 
 
 # # Define the start and end points for the two parallel lines
@@ -644,11 +678,3 @@ for rad in dmedia:
 # # Optionally, add a legend
 # ax.legend(loc="upper left")
 # plt.show()
-
-    results_rad_comparison.append({'radius': rad, 'rmsd': combined_rmsd, 'n_tg_used': len(table_all), 'avg_days_used': np.mean(days_used_per_gauge)})
-
-    # results_rad_comparison.append({'radius': rad, 'rmsd': table['rmsd'].mean(), 'n_tg_used': len(table)})
-    print(f'Radius: {rad} km processesed.')
-
-results_df = pd.DataFrame(results_rad_comparison)
-results_df
