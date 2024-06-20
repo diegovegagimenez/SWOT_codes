@@ -13,6 +13,17 @@ warnings.filterwarnings("ignore")
 import loess_smooth_handmade as loess  # for LOESS filter
 import math
 
+# ----------------------------------PARAMETERS------------------------------------------------------------------------
+# Strategy for selecting CMEMS data points around tide gauge locations
+# 0: Average nearby SSH values within the radius
+# 1: Select the closest SSH value within the radius
+strategy = 0
+
+# Maximum distance from each CMEMS point to the tide gauge location
+dmedia = np.arange(10, 65, 5)  # Array of distances from 5 to 110 km in 5 km increments
+
+# Window size for the LOESS filter (in days)
+day_window = 7
 
 # Function for calculating the Haversine distance between two points
 def haversine(lon1, lat1, lon2, lat2):
@@ -32,12 +43,25 @@ def haversine(lon1, lat1, lon2, lat2):
 
 path ='/home/dvega/anaconda3/work/SWOT/'
 
-cmems_path = f'{path}CMEMS_data/SEALEVEL_EUR_PHY_L4_NRT_008_060/daily'
-plot_path = f'{path}figures/radius_comparisons_rmsdCorrected_7dLoess_CMEMS_NRT/'
 
-cmems_path = f'{path}CMEMS_data/cmems_obs-sl_eur_phy-ssh_my_allsat-l4-duacs-0.125deg_P1D'
-plot_path = f'{path}figures/radius_comparisons_rmsdCorrected_7dLoess_CMEMS_reprocessed/'
+# ALTIMETRY DATA PRODUCTS PATHS ----------------------------------------------------------------------------------------
+# DUACS (SWOT L4) GLOBAL
+cmems_path = f'{path}SWOT_L4/'
+plot_path = f'{path}figures/radius_comparisons_SWOT_L4/'
 
+# Near real time (NRT) EUROPE
+# cmems_path = f'{path}CMEMS_data/SEALEVEL_EUR_PHY_L4_NRT_008_060/daily'
+# plot_path = f'{path}figures/radius_comparisons_CMEMS_EUR_NRT/'
+
+# Near real time (NRT) GLOBAL
+# cmems_path = f'{path}CMEMS_data/SEALEVEL_GLO_PHY_L4_NRT_008_060/'
+# plot_path = f'{path}figures/radius_comparisons_CMEMS_GLO_NRT/'
+
+# Reprocessed (Not available all time series)
+# cmems_path = f'{path}CMEMS_data/cmems_obs-sl_eur_phy-ssh_my_allsat-l4-duacs-0.125deg_P1D'
+# plot_path = f'{path}figures/radius_comparisons_rmsdCorrected_7dLoess_CMEMS_reprocessed/'
+
+# tide gauge data paths ---------------------------------------------------
 data_tg = np.load(f'{path}mareografos/TGresiduals1d_2023_European_Seas_SWOT_FSP.npz')
 names_tg = pd.read_csv(f'{path}mareografos/GLOBAL_TGstations_CMEMS_SWOT_FSP_Feb2024', header=None)
 
@@ -106,13 +130,7 @@ data_arrays = ordered_data_arrays
 
 lolabox = [-2, 8, 35, 45]
 
-strategy = 0
-
 results_rad_comparison = []  # List to store results for each radius
-
-# Maximum distance from each CMEMS point to the tide gauge location
-
-dmedia = np.arange(10, 45, 5)  # Array of distances from 5 to 110 km in 5 km increments
 
 # Loop through all netCDF files in the folder
 nc_files = [f for f in os.listdir(cmems_path) if f.endswith('.nc')]
@@ -320,6 +338,8 @@ for rad in dmedia:
             # Determine the overlapping period
             start_date = max(ssh_cmems_station.index.min(), tg_station.index.min())
             end_date = min(ssh_cmems_station.index.max(), tg_station.index.max())
+            # start_date = pd.Timestamp('2023-04-03 00:00:00')
+            # end_date = pd.Timestamp('2023-07-09 00:00:00')  # End date for the overlapping period with SWOT
             
             # Filter the time series to the overlapping period
             cmems_ts = ssh_cmems_station[start_date:end_date]
@@ -345,20 +365,19 @@ for rad in dmedia:
             cmems_ts.reset_index(inplace=True)
 
             if len(cmems_ts) != 0:
-                # Filter noise using LOESS filter
-                day_window = 7
+
                 # frac_lowess = day_window / len(cmems_ts)  #  10 days window
                 frac_loess = 1 / day_window #  7 days window    fc = 1/Scale
 
                 # SWOT
                 # filt_lowess = sm.nonparametric.lowess(swot_ts['demean'], swot_ts['time'], frac=frac_lowess, return_sorted=False)
-                filt_loess = loess.loess_smooth_handmade(cmems_ts['demean'].values, frac_loess)
-                cmems_ts['demean_filtered'] = filt_loess
+                filt_loess_cmems = loess.loess_smooth_handmade(cmems_ts['demean'].values, frac_loess)
+                cmems_ts['demean_filtered'] = filt_loess_cmems
 
                 # TGs
                 # filt_lowess = sm.nonparametric.lowess(tg_ts['demean'], tg_ts['time'], frac=frac_lowess, return_sorted=False)
-                filt_loess = loess.loess_smooth_handmade(tg_ts['demean'].values, frac_loess)
-                tg_ts['demean_filtered'] = filt_loess
+                filt_loess_tg = loess.loess_smooth_handmade(tg_ts['demean'].values, frac_loess)
+                tg_ts['demean_filtered'] = filt_loess_tg
             else:
                 empty_stations.append(station)
                 print(f"Station {sorted_names[station]} has no CMEMS data")
@@ -389,23 +408,30 @@ for rad in dmedia:
 
             # PLOTTING TIME SERIES
             # plt.figure(figsize=(10, 6))
-            # plt.plot(cmems_ts['time'], cmems_ts[demean], label='CMEMS',  linewidth=5, c='b')
+            # plt.plot(cmems_ts['time'], cmems_ts[demean], label='CMEMS',  linewidth=3, c='b')
             # plt.plot(cmems_ts['time'], cmems_ts['demean'], label='CMEMS unfiltered', linestyle='--', c='b', alpha=0.5)
 
             # # plt.scatter(cmems_ts['time'], cmems_ts[demean])
-            # plt.plot(tg_ts['time'], tg_ts[demean], label='TGs',  linewidth=5, c='g')
+            # plt.plot(tg_ts['time'], tg_ts[demean], label='TGs',  linewidth=3, c='g')
             # plt.plot(tg_ts['time'], tg_ts['demean'], label='TGs unfiltered', linestyle='--', c='g', alpha=0.5)
 
             # # plt.scatter(tg_ts['time'], tg_ts[demean])
             # plt.title(f'{sorted_names[station]}, {rad}km_radius, {day_window}dLoess, CMEMS_NRT')
             # plt.legend()
             # plt.xticks(rotation=20)
+            # plt.yticks(np.arange(-15, 18, 3))
+
             # # plt.xlabel('time')
             # plt.grid(True, alpha=0.2)
-            # plt.ylabel('SSHA (m)')
+            # plt.ylabel('SSHA (cm)')
             # plt.tick_params(axis='both', which='major', labelsize=11)
+            # plt.text(0.95, 0.1, f'RMSD: {rmsd:.2f} cm', fontsize=12, color='black', 
+            #          transform=plt.gca().transAxes, ha='right', bbox=dict(facecolor='white', alpha=0.5))
+            # plt.text(0.95, 0.2, f'CORRELATION: {correlation:.2f}', fontsize=12, color='black', 
+            #          transform=plt.gca().transAxes, ha='right', bbox=dict(facecolor='white', alpha=0.5))
 
-            # plt.savefig(f'{plot_path}{sorted_names[station]}_{rad}km_{day_window}dLoess_CMEMS_reprocessed.png')
+
+            # plt.savefig(f'{plot_path}{sorted_names[station]}_{rad}km_{day_window}dLoess_CMEMS_Reprocessed.png')
 
 
             # MAP PLOT OF CMEMS LOCATIONS OBTAINED FROM EACH GAUGE!
@@ -423,7 +449,7 @@ for rad in dmedia:
             # ax.gridlines(draw_labels=True)
 
             # ax.legend(loc="upper left")
-            # # ax.title(f'Station {sorted_names[station]}')
+            # ax.title(f'Station {sorted_names[station]}')
 
         except (KeyError, ValueError):  # Handle cases where station might not exist in df or time has NaNs
             # Print message or log the issue and save the station index for dropping the empty stations
@@ -488,18 +514,43 @@ for rad in dmedia:
     # Step 3: Take the square root of the mean
     combined_rmsd = math.sqrt(mean_squared_rmsd)
 
-    results_rad_comparison.append({'radius': rad, 'rmsd': combined_rmsd, 'rmsd_simply_averaged':np.mean(rmsds), 'n_tg_used': len(table_all['rmsd'].dropna())})
+    results_rad_comparison.append({'radius': rad, 'rmsd': combined_rmsd, 'rmsd_simply_averaged':np.mean(rmsds), 'n_tg_used': len(table_all['rmsd'].dropna()), "avg_days_used": np.mean(days_used_per_gauge)})
 
 results_df = pd.DataFrame(results_rad_comparison)
 
 results_df
 
 
-# plt.plot(results_df_SWOT['radius'], results_df_SWOT['rmsd'])
+# plt.plot(results_df_swot['radius'], results_df_swot['rmsd'])
 # plt.plot(results_df_NRT['radius'], results_df_NRT['rmsd'])
 # plt.plot(results_df_reprocessed['radius'], results_df_reprocessed['rmsd'])
+# plt.plot(results_df_L4['radius'], results_df_L4['rmsd'])
 # plt.xlabel('Radius (km)')
 # plt.ylabel('RMSD (cm)')
-# plt.legend(['SWOT', 'NRT', 'Reprocessed'])
+# plt.legend(['SWOT L3', 'NRT', 'Reprocessed', 'DUACS(SWOT L4)'], loc = 1, bbox_to_anchor=(0.5, 0., 0.5, 0.7))
 # plt.title('RMSD vs Radius')
 # plt.grid(True, alpha = 0.4)
+
+
+# plt.figure(figsize=(10, 6))
+# plt.plot(cmems_ts['time'], cmems_ts[demean], label='DUACS', c='b', linewidth=3)
+# plt.plot(cmems_ts['time'], cmems_ts['demean'], label='DUACS unfiltered', linestyle='--', c='b', alpha=0.6)
+
+# # plt.scatter(swot_ts['time'], swot_ts[demean])
+# plt.plot(tg_ts_swot['time'], tg_ts_swot[demean], label='TGs', linewidth=3, c='g')
+# plt.plot(tg_ts_swot['time'], tg_ts_swot['demean'], label='TGs unfiltered', linestyle='--', c='g', alpha=0.6)
+
+# plt.scatter
+
+# plt.title(f'{sorted_names[station]}, {rad}km_radius, {day_window}dLoess, DUACS_NRT')
+# plt.legend()
+# plt.xticks(rotation=20)
+# plt.yticks(np.arange(-15, 18, 3))
+# # plt.xlabel('time')
+# plt.grid(True, alpha=0.3)
+# plt.ylabel('SSHA (cm)')
+# plt.tick_params(axis='both', which='major', labelsize=11)
+# plt.text(0.95, 0.1, f'RMSD: {rmsd:.2f} cm', fontsize=12, color='black', 
+#          transform=plt.gca().transAxes, ha='right', bbox=dict(facecolor='white', alpha=0.5))
+# plt.text(0.95, 0.2, f'CORRELATION: {correlation:.2f}', fontsize=12, color='black', 
+#          transform=plt.gca().transAxes, ha='right', bbox=dict(facecolor='white', alpha=0.5))
