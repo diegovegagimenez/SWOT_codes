@@ -36,7 +36,7 @@ def haversine(lon1, lat1, lon2, lat2):
 
 path ='/home/dvega/anaconda3/work/SWOT/'
 
-# SWOT data path -----------------------------------------------------------------------------------------------
+# SWOT data -----------------------------------------------------------------------------------------------
 # folder_path = (f'{path}swot_basic_1day/003_016_pass/')  # Define SWOT passes folders
 folder_path = (f'{path}swot_basic_1day/003_016_passv1.0/')  # Define SWOT passes folders
 
@@ -152,7 +152,7 @@ data_arrays = ordered_data_arrays
 strategy = 0
 
 # Radius in km for averaging nearby points
-dmedia = np.arange(30, 35, 5)
+dmedia = np.arange(10, 15, 5)
 
 # Loop through all netCDF files in the folder
 nc_files = [f for f in os.listdir(folder_path) if f.endswith('.nc')]
@@ -263,7 +263,8 @@ for rad in dmedia:
             all_swot_timeseries.append(selected_data)
 
     # CONVERT TO DATAFRAME for easier managing
-    df = pd.DataFrame(all_swot_timeseries).dropna(how='any')  # Convert to DataFrame
+    # df = pd.DataFrame(all_swot_timeseries).dropna(how='any')  # Convert to DataFrame
+    df = pd.DataFrame(all_swot_timeseries) # Convert to DataFrame
 
     # Dropping wrong tide gauges (errors in tide gauge raw data)
     drop_tg_names = ['station_GL_TS_TG_TamarisTG',
@@ -348,7 +349,8 @@ for rad in dmedia:
         df_tg.append(tg_data)
 
     # Concatenate all DataFrames into a single DataFrame
-    df_tg = pd.concat(df_tg, ignore_index=True).dropna(how='any')
+    # df_tg = pd.concat(df_tg, ignore_index=True).dropna(how='any')
+    df_tg = pd.concat(df_tg, ignore_index=True)
 
 
     # ---------------- MANAGING COMPARISON BETWEEN TG AND SWOT ------------------------------------------------
@@ -378,6 +380,9 @@ for rad in dmedia:
                 # tg_station = closest_tg_times[station].dropna(dim='time')
                 tg_station = df_tg[df_tg['station'] == sorted_names[station]].copy()
 
+                # Transform empty arrays to Not a time (NaT)
+                ssh_swot_station['time'] = ssh_swot_station['time'].apply(lambda x: pd.NaT if isinstance(x, np.ndarray) and x.size == 0 else x)
+                
                 # Convert time column to numpy datetime64
                 ssh_swot_station['time'] = pd.to_datetime(ssh_swot_station['time'])
                 tg_station['time'] = pd.to_datetime(tg_station['time'])
@@ -467,25 +472,30 @@ for rad in dmedia:
                 min_distances.append(swot_ts['min_distance'].min())
 
                 # PLOT SERIES TEMPORALES INCLUYENDO GAPS!
-                # plt.figure(figsize=(10, 6))
-                # plt.plot(swot_ts['time'], swot_ts[demean], label='SWOT', c='b', linewidth=3)
-                # plt.plot(swot_ts['time'], swot_ts['demean'], label='SWOT unfiltered', linestyle='--', c='b', alpha=0.6)
+                plt.figure(figsize=(10, 6))
+                plt.plot(swot_ts['time'], swot_ts[demean], label='SWOT', c='b', linewidth=3)
+                plt.plot(swot_ts['time'], swot_ts['demean'], label='SWOT unfiltered', linestyle='--', c='b', alpha=0.6)
 
-                # # plt.scatter(swot_ts['time'], swot_ts[demean])
-                # plt.plot(tg_ts['time'], tg_ts[demean], label='TGs', linewidth=3, c='g')
-                # plt.plot(tg_ts['time'], tg_ts['demean'], label='TGs unfiltered', linestyle='--', c='g', alpha=0.6)
+                # plt.scatter(swot_ts['time'], swot_ts[demean])
+                plt.plot(tg_ts['time'], tg_ts[demean], label='TGs', linewidth=3, c='g')
+                plt.plot(tg_ts['time'], tg_ts['demean'], label='TGs unfiltered', linestyle='--', c='g', alpha=0.6)
 
-                # plt.title(f'{sorted_names[station]}, {rad}km_radius, {day_window}dLoess, V1.0 SWOT (L3)')
-                # plt.legend()
-                # plt.xticks(rotation=20)
-                # plt.yticks(np.arange(-15, 18, 3))
-                # plt.xlabel('time')
+                plt.title(f'{sorted_names[station]}, {rad}km_radius, {day_window}dLoess, V1.0 SWOT (L3)')
+                plt.legend()
+                plt.xticks(rotation=20)
+                plt.yticks(np.arange(-15, 18, 3))
+                plt.xlabel('time')
 
-                # plt.grid(True, alpha=0.2)
-                # plt.ylabel('SSHA (cm)')
-                # plt.tick_params(axis='both', which='major', labelsize=11)
+                plt.grid(True, alpha=0.2)
+                plt.ylabel('SSHA (cm)')
+                plt.tick_params(axis='both', which='major', labelsize=11)
                 # plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%m-%d'))  # Use '%m-%d' for MM-DD format
-                # plt.gca().xaxis.set_major_locator(mdates.DayLocator(interval=10))
+                plt.gca().xaxis.set_major_locator(mdates.DayLocator(interval=10))
+                plt.text(0.95, 0.1, f'RMSD: {rmsd:.2f} cm', fontsize=12, color='black', 
+                         transform=plt.gca().transAxes, ha='right', bbox=dict(facecolor='white', alpha=0.5))
+                plt.text(0.95, 0.2, f'CORRELATION: {correlation:.2f}', fontsize=12, color='black', 
+                         transform=plt.gca().transAxes, ha='right', bbox=dict(facecolor='white', alpha=0.5))
+
 
                 # plt.savefig(f'{plot_path}{sorted_names[station]}_{rad}km_{day_window}dLoess.png')
 
@@ -602,28 +612,28 @@ results_df
 
 
 # PLOTTING MAP WITH TIDE GAUGE LOCATIONS AND SWOT FOOTPRINTS
-fig, ax = plt.subplots(figsize=(10.5, 11), subplot_kw=dict(projection=ccrs.PlateCarree()))
-lolabox = [0, 7, 36, 44]
-# Set the extent to focus on the defined lon-lat box
-ax.set_extent(lolabox, crs=ccrs.PlateCarree())
+# fig, ax = plt.subplots(figsize=(10.5, 11), subplot_kw=dict(projection=ccrs.PlateCarree()))
+# lolabox = [0, 7, 36, 44]
+# # Set the extent to focus on the defined lon-lat box
+# ax.set_extent(lolabox, crs=ccrs.PlateCarree())
 
-# Add scatter plot for specific locations
-ax.scatter(tg_ts['longitude'][0], tg_ts['latitude'][0], c='g', marker='o', s=120, transform=ccrs.Geodetic(), label='Tide Gauge Tarragona', zorder=3)
+# # Add scatter plot for specific locations
+# ax.scatter(tg_ts['longitude'][0], tg_ts['latitude'][0], c='g', marker='o', s=120, transform=ccrs.Geodetic(), label='Tide Gauge Tarragona', zorder=3)
 
-ax.scatter(df_tg['longitude'][:-1], df_tg['latitude'][:-1], c='black', marker='o', s=40, transform=ccrs.Geodetic(), label='Other tide gauges', zorder=2)
+# ax.scatter(df_tg['longitude'][:-1], df_tg['latitude'][:-1], c='black', marker='o', s=40, transform=ccrs.Geodetic(), label='Other tide gauges', zorder=2)
 
-# Plot SWOT footprints for pass 003
-ax.scatter(lonsw1.flatten(), latsw1.flatten(), c=color, s=0.5, alpha=alphav, zorder = 0,transform=ccrs.PlateCarree())
-ax.scatter(lonsw2.flatten(), latsw2.flatten(), c=color, s=0.5, alpha=alphav, zorder = 0,transform=ccrs.PlateCarree())
-ax.scatter(lonnd1.flatten(), latnd1.flatten(), c=color, s=0.5, alpha=alphav, zorder = 0,transform=ccrs.PlateCarree())
-ax.scatter(lonnd2.flatten(), latnd2.flatten(), c=color, s=0.5, alpha=alphav, zorder = 0,transform=ccrs.PlateCarree())
+# # Plot SWOT footprints for pass 003
+# ax.scatter(lonsw1.flatten(), latsw1.flatten(), c=color, s=0.5, alpha=alphav, zorder = 0,transform=ccrs.PlateCarree())
+# ax.scatter(lonsw2.flatten(), latsw2.flatten(), c=color, s=0.5, alpha=alphav, zorder = 0,transform=ccrs.PlateCarree())
+# ax.scatter(lonnd1.flatten(), latnd1.flatten(), c=color, s=0.5, alpha=alphav, zorder = 0,transform=ccrs.PlateCarree())
+# ax.scatter(lonnd2.flatten(), latnd2.flatten(), c=color, s=0.5, alpha=alphav, zorder = 0,transform=ccrs.PlateCarree())
 
-# Add coastlines and gridlines
-ax.coastlines()
-ax.gridlines(draw_labels=True)
-ax.add_feature(cfeature.LAND, edgecolor='black', facecolor='grey', zorder=1)  # Set land color to grey
+# # Add coastlines and gridlines
+# ax.coastlines()
+# ax.gridlines(draw_labels=True)
+# ax.add_feature(cfeature.LAND, edgecolor='black', facecolor='grey', zorder=1)  # Set land color to grey
 
-ax.legend(loc="upper left")
+# ax.legend(loc="upper left")
 
 
 
