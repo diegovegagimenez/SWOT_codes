@@ -33,6 +33,14 @@ def haversine(lon1, lat1, lon2, lat2):
     r = 6371
     return c * r
 
+# Function for calculating the Z-scores of a series and removing outliers
+def calculate_z_scores(series):
+    mean = series.mean()
+    std = series.std()
+    return (series - mean) / std
+
+threshold_outliers = 2  # Threshold for Z-scores to remove outliers
+
 
 path ='/home/dvega/anaconda3/work/SWOT/'
 
@@ -145,6 +153,34 @@ for name in sorted_names:
 # Replace the original data_arrays list with the ordered version
 data_arrays = ordered_data_arrays
 
+# Create dataframe with tide gauge data
+df_tg = []
+
+# Iterate over each DataArray
+for da in data_arrays:
+    # Extracting values from the DataArray
+    time_values = da["time"].values
+    sla_values = da.values
+    station_name = da.name  # Extracting station name from DataArray name
+    latitude = da.latitude.values  
+    longitude = da.longitude.values
+
+    # Create a DataFrame for the current DataArray
+    tg_data = pd.DataFrame({
+        'time': time_values,
+        'ssha': sla_values,
+        'station': [station_name] * len(time_values),
+        'latitude': latitude,
+        'longitude': longitude
+    })
+
+    # Append the DataFrame to the list
+    df_tg.append(tg_data)
+
+# Concatenate all DataFrames into a single DataFrame
+df_tg_dropna = pd.concat(df_tg, ignore_index=True).dropna(how='any')
+df_tg = pd.concat(df_tg, ignore_index=True)
+
 # ------------------------ PROCESSING SWOT DATA AROUND TG LOCATIONS --------------------------------------------------
 # Choose strategy for handling missing data (average nearby points or closest non-NaN)
 # 0: Average nearby points (within radius)
@@ -174,7 +210,7 @@ for rad in dmedia:
         lon = ds['longitude'].values.flatten()
         lat = ds['latitude'].values.flatten()
         ssh = ds['ssha_noiseless'].values.flatten()
-        ssh = ds['ssha'].values.flatten()
+        # ssh = ds['ssha'].values.flatten()
 
         time_values = ds['time'].values  # Adding a new
         time = np.tile(time_values[:, np.newaxis], (1, 69)).flatten()  # Not efficient
@@ -262,9 +298,11 @@ for rad in dmedia:
             # Append the list of SSH values for all gauges for this file
             all_swot_timeseries.append(selected_data)
 
+    # Check % of missing data from each station
+
     # CONVERT TO DATAFRAME for easier managing
-    # df = pd.DataFrame(all_swot_timeseries).dropna(how='any')  # Convert to DataFrame
-    df = pd.DataFrame(all_swot_timeseries) # Convert to DataFrame
+    df_dropna = pd.DataFrame(all_swot_timeseries).dropna(how='any')  # Convert to DataFrame
+    df2 = pd.DataFrame(all_swot_timeseries) # df with nans
 
     # Dropping wrong tide gauges (errors in tide gauge raw data)
     drop_tg_names = ['station_GL_TS_TG_TamarisTG',
@@ -273,41 +311,7 @@ for rad in dmedia:
                     'station_GL_TS_TG_CassisTG',
                     'station_MO_TS_TG_PORTO-CRISTO']
     
-    df = df[~df['station_name'].isin(drop_tg_names)].reset_index(drop=True)
-
-
-
-    # Dataframe to store SWOT time series data for each TG station
-    station_time_series = []
-
-    for i in range(0, len(all_swot_timeseries)):  # Loop through each file's data
-        file_data = all_swot_timeseries[i]
-
-        station_name = file_data["station_name"]
-        ssha_value = file_data["ssha"]
-        lon = file_data['longitude'],  # Longitude of selected SWOT point
-        lat = file_data['latitude'],  # Latitude of selected SWOT point
-        time = file_data['time']
-        n_val = file_data['n_val']  # Number of points for the average within the radius or distance of the closest point
-        ssh_raw = file_data['ssha_raw']  # Raw SSH values within the radius
-        swot_lat_within_radius = file_data['swot_lat_within_radius']  # Latitudes of SWOT within the radius
-        swot_lon_within_radius = file_data['swot_lon_within_radius']  # Longitudes of SWOT within the radius
-        min_distance = file_data['min_distance']  # Closest distance within the radius
-        
-        # Append the SSH and time s to the station's time series
-        station_time_series.append({'station_name': station_name,
-                                    'ssha': ssha_value,
-                                    'latitude': lat,
-                                    'longitude': lon,
-                                    'time': time,
-                                    'num_swot_points': n_val,
-                                    'raw_ssha': ssh_raw,
-                                    'swot_lat_within_radius': swot_lat_within_radius,
-                                    'swot_lon_within_radius': swot_lon_within_radius,
-                                    'min_distance': min_distance})
-
-
-    df2 = pd.DataFrame(station_time_series)
+    df_dropna = df_dropna[~df_dropna['station_name'].isin(drop_tg_names)].reset_index(drop=True)
 
     # ------------------ OBTAINING STATISTICS COMPARISON ---------------------------------------------------
 
@@ -318,39 +322,12 @@ for rad in dmedia:
     var_SWOT = []
     var_diff = []
     days_used_per_gauge = []
-    n_nans_tg = []
+    nans_percentage = []
     min_distances = []
 
 
     # Convert from Series of ndarrays containing dates to Series of timestamps
     # df['time'] = df['time'].apply(lambda x: x[0])
-
-    df_tg = []
-
-    # Iterate over each DataArray
-    for da in data_arrays:
-        # Extracting values from the DataArray
-        time_values = da["time"].values
-        sla_values = da.values
-        station_name = da.name  # Extracting station name from DataArray name
-        latitude = da.latitude.values  
-        longitude = da.longitude.values
-
-        # Create a DataFrame for the current DataArray
-        tg_data = pd.DataFrame({
-            'time': time_values,
-            'ssha': sla_values,
-            'station': [station_name] * len(time_values),
-            'latitude': latitude,
-            'longitude': longitude
-        })
-
-        # Append the DataFrame to the list
-        df_tg.append(tg_data)
-
-    # Concatenate all DataFrames into a single DataFrame
-    # df_tg = pd.concat(df_tg, ignore_index=True).dropna(how='any')
-    df_tg = pd.concat(df_tg, ignore_index=True)
 
 
     # ---------------- MANAGING COMPARISON BETWEEN TG AND SWOT ------------------------------------------------
@@ -365,10 +342,9 @@ for rad in dmedia:
     idx_tg = np.arange(len(sorted_names))
     for station in idx_tg:
         try:
+            # Filter SWOT and TG data for the current station
+            ssh_swot_station = df_dropna[df_dropna['station_name'] == sorted_names[station]].copy()  # Corrected warnings
 
-            # ssh_swot_station = df[df['station_name'] == sorted_names[station]]
-            ssh_swot_station = df[df['station_name'] == sorted_names[station]].copy()  # Corrected warnings
-            # print(len(ssh_swot_station))
             if ssh_swot_station.empty:
                 empty_stations.append(station)
                 # print(f"No SWOT data found for station {sorted_names[station]}")
@@ -378,9 +354,9 @@ for rad in dmedia:
                 ssh_swot_station.sort_values(by='time', inplace=True)
 
                 # tg_station = closest_tg_times[station].dropna(dim='time')
-                tg_station = df_tg[df_tg['station'] == sorted_names[station]].copy()
+                tg_station = df_tg_dropna[df_tg_dropna['station'] == sorted_names[station]].copy()
 
-                # Transform empty arrays to Not a time (NaT)
+                # Transform empty arrays into Not a time (NaT)
                 ssh_swot_station['time'] = ssh_swot_station['time'].apply(lambda x: pd.NaT if isinstance(x, np.ndarray) and x.size == 0 else x)
                 
                 # Convert time column to numpy datetime64
@@ -420,11 +396,25 @@ for rad in dmedia:
                 swot_ts_demean = swot_ts['ssha'] - swot_mean
                 swot_ts['demean'] = swot_ts_demean
 
+                # Remove outliers based on Z-scores
+                tg_z_scores = calculate_z_scores(tg_ts['demean'])
+                swot_z_scores = calculate_z_scores(swot_ts['demean'])
+
+                tg_ts = tg_ts[np.abs(tg_z_scores) <= threshold_outliers]
+                swot_ts = swot_ts[np.abs(swot_z_scores) <= threshold_outliers]
+
                 #  Create a Dataframe with both variables tg_ts and swot_ts
                 tg_ts.reset_index(inplace=True)
                 swot_ts.reset_index(inplace=True)
 
-                if len(swot_ts) != 0: #---------------------------------------------------------------------------------------------
+                # Drop the stations where the TG stations have more than 20% of NaNs for the period
+                tg_ts_nans = df_tg[df_tg['station'] == sorted_names[station]].copy()
+                tg_ts_nans['time'] = pd.to_datetime(tg_ts_nans['time']) # Convert time to datetime
+                tg_ts_nans.set_index('time', inplace=True)
+                tg_ts_nans = tg_ts_nans[start_date:end_date]
+                tg_ts_nans = tg_ts_nans['ssha'].isna().sum() / len(tg_ts) * 100
+
+                if len(swot_ts) != 0 and tg_ts_nans < 20: #---------------------------------------------------------------------------------------------
 
                     # Filter noise using LOESS filter
                     day_window = 7
@@ -441,9 +431,13 @@ for rad in dmedia:
                     filt_loess_tg = loess.loess_smooth_handmade(tg_ts['demean'].values, frac_loess)
                     tg_ts['demean_filtered'] = filt_loess_tg
 
+                    # Add the stations with less than 20% of NaNs
+                    nans_percentage.append(tg_ts_nans)
+
                 else:
                     empty_stations.append(station)
-                    print(f"Station {sorted_names[station]} has no CMEMS data")
+                    print(f"Station {sorted_names[station]} has no SWOT data")
+                    print(f"Station {sorted_names[station]} has more than 20% of NaNs")
                     continue  #---------------------------------------------------------------------------------------------
 
                 # Calculate correlation between swot and tg
@@ -472,29 +466,29 @@ for rad in dmedia:
                 min_distances.append(swot_ts['min_distance'].min())
 
                 # PLOT SERIES TEMPORALES INCLUYENDO GAPS!
-                plt.figure(figsize=(10, 6))
-                plt.plot(swot_ts['time'], swot_ts[demean], label='SWOT', c='b', linewidth=3)
-                plt.plot(swot_ts['time'], swot_ts['demean'], label='SWOT unfiltered', linestyle='--', c='b', alpha=0.6)
+                # plt.figure(figsize=(10, 6))
+                # plt.plot(swot_ts['time'], swot_ts[demean], label='SWOT', c='b', linewidth=3)
+                # plt.plot(swot_ts['time'], swot_ts['demean'], label='SWOT unfiltered', linestyle='--', c='b', alpha=0.6)
 
-                # plt.scatter(swot_ts['time'], swot_ts[demean])
-                plt.plot(tg_ts['time'], tg_ts[demean], label='TGs', linewidth=3, c='g')
-                plt.plot(tg_ts['time'], tg_ts['demean'], label='TGs unfiltered', linestyle='--', c='g', alpha=0.6)
+                # # plt.scatter(swot_ts['time'], swot_ts[demean])
+                # plt.plot(tg_ts['time'], tg_ts[demean], label='TGs', linewidth=3, c='g')
+                # plt.plot(tg_ts['time'], tg_ts['demean'], label='TGs unfiltered', linestyle='--', c='g', alpha=0.6)
 
-                plt.title(f'{sorted_names[station]}, {rad}km_radius, {day_window}dLoess, V1.0 SWOT (L3)')
-                plt.legend()
-                plt.xticks(rotation=20)
-                plt.yticks(np.arange(-15, 18, 3))
-                plt.xlabel('time')
+                # plt.title(f'{sorted_names[station]}, {rad}km_radius, {day_window}dLoess, V1.0 SWOT (L3)')
+                # plt.legend()
+                # plt.xticks(rotation=20)
+                # plt.yticks(np.arange(-15, 18, 3))
+                # plt.xlabel('time')
 
-                plt.grid(True, alpha=0.2)
-                plt.ylabel('SSHA (cm)')
-                plt.tick_params(axis='both', which='major', labelsize=11)
-                # plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%m-%d'))  # Use '%m-%d' for MM-DD format
-                plt.gca().xaxis.set_major_locator(mdates.DayLocator(interval=10))
-                plt.text(0.95, 0.1, f'RMSD: {rmsd:.2f} cm', fontsize=12, color='black', 
-                         transform=plt.gca().transAxes, ha='right', bbox=dict(facecolor='white', alpha=0.5))
-                plt.text(0.95, 0.2, f'CORRELATION: {correlation:.2f}', fontsize=12, color='black', 
-                         transform=plt.gca().transAxes, ha='right', bbox=dict(facecolor='white', alpha=0.5))
+                # plt.grid(True, alpha=0.2)
+                # plt.ylabel('SSHA (cm)')
+                # plt.tick_params(axis='both', which='major', labelsize=11)
+                # # plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%m-%d'))  # Use '%m-%d' for MM-DD format
+                # plt.gca().xaxis.set_major_locator(mdates.DayLocator(interval=10))
+                # plt.text(0.95, 0.1, f'RMSD: {rmsd:.2f} cm', fontsize=12, color='black', 
+                #          transform=plt.gca().transAxes, ha='right', bbox=dict(facecolor='white', alpha=0.5))
+                # plt.text(0.95, 0.2, f'CORRELATION: {correlation:.2f}', fontsize=12, color='black', 
+                #          transform=plt.gca().transAxes, ha='right', bbox=dict(facecolor='white', alpha=0.5))
 
 
                 # plt.savefig(f'{plot_path}{sorted_names[station]}_{rad}km_{day_window}dLoess.png')
@@ -516,9 +510,6 @@ for rad in dmedia:
                 # ax.legend(loc="upper left")
                 # ax.title(f'Station {sorted_names[station]} taking radius of {dmedia} km')
 
-
-
-
         except (KeyError, ValueError):  # Handle cases where station might not exist in df or time has NaNs
             # Print message or log the issue and save the station index for dropping the empty stations
             empty_stations.append(station)
@@ -535,7 +526,7 @@ for rad in dmedia:
 
         # Calculate the average number of SWOT values used within the radius (if data exists)
         if not station_data.empty:  # Check if DataFrame is empty
-            n_val_avg = np.mean(station_data['num_swot_points'])  # Access 'n_val' column directly
+            n_val_avg = np.mean(station_data['n_val']) 
         else:
             n_val_avg = np.nan  # Assign NaN for missing data
 
@@ -548,6 +539,7 @@ for rad in dmedia:
     ordered_lon_mod = [x for i, x in enumerate(ordered_lon) if i not in empty_stations] 
     n_val = [x for i, x in enumerate(n_val) if i not in empty_stations]
 
+
     # Create a DataFrame to store all the statistics
     table_all = pd.DataFrame({'station': sorted_names_mod,
                             'correlation': correlations,
@@ -559,7 +551,8 @@ for rad in dmedia:
                             'n_days': days_used_per_gauge,
                             'latitude': ordered_lat_mod,
                             'longitude': ordered_lon_mod,
-                            'min_distance': min_distances
+                            'min_distance': min_distances,
+                            'nans_percentage': nans_percentage
                             })
 
 
@@ -567,7 +560,7 @@ for rad in dmedia:
     # Delete the wrong rows/tgs from rmsds
     threshold = 5  # RMSD > 5 out
 
-    # Step 1: Square each RMSD value and filter by threshold
+    # Step 1: Square each RMSD and Correlation value and filter by threshold
     squared_rmsd = [x**2 for x in rmsds if x < threshold]
     
     # Step 2: Sum the squared RMSD values
@@ -579,9 +572,18 @@ for rad in dmedia:
     # Step 4: Take the square root of the mean
     combined_rmsd = math.sqrt(mean_squared_rmsd)
 
-    results_rad_comparison.append({'radius': rad, 'rmsd': combined_rmsd, 'n_tg_used': len(table_all), 'avg_days_used':np.mean(days_used_per_gauge)})
+    results_rad_comparison.append({'radius': rad,
+                                    'rmsd': combined_rmsd,
+                                    'n_tg_used': len(table_all),
+                                    'avg_days_used':np.mean(days_used_per_gauge),
+                                    'avg_tg_nans': np.mean(nans_percentage),
+                                    'correlation': np.mean(correlations),
+                                    'var_tg': np.mean(var_tg),
+                                    'var_swot': np.mean(var_SWOT),
+                                    'var_diff': np.mean(var_diff),
+                                    'min_distance': np.mean(min_distances),
+                                    'n_stations': len(sorted_names_mod)})
 
-    # results_rad_comparison.append({'radius': rad, 'rmsd': table['rmsd'].mean(), 'n_tg_used': len(table)})
     print(f'Radius: {rad} km processesed.')
 
 results_df = pd.DataFrame(results_rad_comparison)
@@ -620,7 +622,7 @@ results_df
 # # Add scatter plot for specific locations
 # ax.scatter(tg_ts['longitude'][0], tg_ts['latitude'][0], c='g', marker='o', s=120, transform=ccrs.Geodetic(), label='Tide Gauge Tarragona', zorder=3)
 
-# ax.scatter(df_tg['longitude'][:-1], df_tg['latitude'][:-1], c='black', marker='o', s=40, transform=ccrs.Geodetic(), label='Other tide gauges', zorder=2)
+# ax.scatter(df_tg_dropna['longitude'][:-1], df_tg_dropna['latitude'][:-1], c='black', marker='o', s=40, transform=ccrs.Geodetic(), label='Other tide gauges', zorder=2)
 
 # # Plot SWOT footprints for pass 003
 # ax.scatter(lonsw1.flatten(), latsw1.flatten(), c=color, s=0.5, alpha=alphav, zorder = 0,transform=ccrs.PlateCarree())
