@@ -49,20 +49,25 @@ def calculate_z_scores(series):
 
 threshold_outliers = 3  # Threshold for Z-scores to remove outliers
 
-def process_ts(time_series):
+def process_ts(time_series, product_n):
     """
-    Process the given time series by standarizing and removing outliers based on z-scores.
+    Process the given time series by standarizing, removing outliers and smooth the data.
     """
-    ts_mean = time_series['ssha'].mean()
-    ts_demean = time_series['ssha'] - tg_mean
+    ts_mean = time_series[product_n].mean()
+    ts_demean = time_series[product_n] - ts_mean
     time_series['demean'] = ts_demean
     z_scores = calculate_z_scores(time_series['demean'])
     time_series = time_series[np.abs(z_scores) <= threshold_outliers]
+
+    # Apply a LOESS filter to the time series
+    frac_loess = 1 / day_window
+
+    time_series['demean_filtered'] = loess.loess_smooth_handmade(time_series['demean'].values, frac_loess)
     time_series.reset_index(inplace=True)
 
     return time_series
 
-# Path to the general SWOT data folder
+# Path to the general SWOT data folder -----------------------------------------------------------------------------------
 path ='/home/dvega/anaconda3/work/SWOT/'
 
 # ALTIMETRY DATA PRODUCTS PATHS ----------------------------------------------------------------------------------------
@@ -480,132 +485,138 @@ for rad in dmedia:
         try:
             ssh_station = matched_df[matched_df['station'] == sorted_names[station]].copy()  # Corrected warnings
             
-            if ssh_station.empty:  # Check if the DataFrame is empty                
-                empty_stations.append(station)
-                    # print(f"No CMEMS data found for station {sorted_names[station]}")
-                continue
+            # if ssh_station.empty:  # Check if the DataFrame is empty                
+            #     empty_stations.append(station)
+            #         # print(f"No CMEMS data found for station {sorted_names[station]}")
+            #     continue
 
-            else:
+            # else:
                 # ssh_station.sort_values(by='time', inplace=True) # Sort values by time
 
                 # # tg_station = closest_tg_times[station].dropna(dim='time')
-                ssh_station.dropna(how='any', inplace=True)  # Drop NaNs in time and ssha
+            ssh_station.dropna(how='any', inplace=True)  # Drop NaNs in time and ssha
 
-                # SUBSTRACT THE MEAN VALUE OF EACH TIME SERIE FOR COMPARING
-                tg_ts = process_ts(ssh_station[['time', 'TG']])
-                cmems_eur = process_ts(ssh_station[['time', 'CMEMS_NRT_EUR']])
-                cmems_glo = process_ts(ssh_station[['time', 'CMEMS_NRT_GLO']])
-                swot_l3 = process_ts(ssh_station[['time', 'SWOT L3']])
-                duacs_swot_l4 = process_ts(ssh_station[['time', 'DUACS (SWOT_L4)']])
+            # SUBSTRACT THE MEAN VALUE OF EACH TIME SERIE FOR COMPARING
+            tg_ts = process_ts(ssh_station[['time', 'TG']], 'TG')
+            cmems_eur = process_ts(ssh_station[['time', 'CMEMS_NRT_EUR']], 'CMEMS_NRT_EUR')
+            cmems_glo = process_ts(ssh_station[['time', 'CMEMS_NRT_GLO']], 'CMEMS_NRT_GLO')
+            swot_l3 = process_ts(ssh_station[['time', 'SWOT L3']], 'SWOT L3')
+            duacs_swot_l4 = process_ts(ssh_station[['time', 'DUACS (SWOT_L4)']], 'DUACS (SWOT_L4)')
 
-        except (KeyError, ValueError):  # Handle cases where station might not exist in df or time has NaNs
-            # Print message or log the issue and save the station index for dropping the empty stations
-            print(f'empty station {station} 3')
+            # # Drop the stations where the TG stations have more than 20% of NaNs for the period
+            # tg_ts_nans = df_tg[df_tg['station'] == sorted_names[station]].copy()
+            # tg_ts_nans['time'] = pd.to_datetime(tg_ts_nans['time']) # Convert time to datetime
+            # tg_ts_nans.set_index('time', inplace=True)
+            # tg_ts_nans = tg_ts_nans[start_date:end_date]
+            # tg_ts_nans = tg_ts_nans['ssha'].isna().sum() / len(tg_ts) * 100
+            
+            # if len(alt_ts) != 0 and tg_ts_nans < 20:
 
-                
+            #     # frac_lowess = day_window / len(cmems_ts)  #  10 days window
+            #     frac_loess = 1 / day_window #  7 days window    fc = 1/Scale
 
-                # Drop the stations where the TG stations have more than 20% of NaNs for the period
-                tg_ts_nans = df_tg[df_tg['station'] == sorted_names[station]].copy()
-                tg_ts_nans['time'] = pd.to_datetime(tg_ts_nans['time']) # Convert time to datetime
-                tg_ts_nans.set_index('time', inplace=True)
-                tg_ts_nans = tg_ts_nans[start_date:end_date]
-                tg_ts_nans = tg_ts_nans['ssha'].isna().sum() / len(tg_ts) * 100
-                
-                if len(alt_ts) != 0 and tg_ts_nans < 20:
+            #     # CMEMS
+            #     # filt_lowess = sm.nonparametric.lowess(cmems_ts['demean'], cmems_ts['time'], frac=frac_lowess, return_sorted=False)
+            #     filt_loess_cmems = loess.loess_smooth_handmade(alt_ts['demean'].values, frac_loess)
+            #     alt_ts['demean_filtered'] = filt_loess_cmems
 
-                    # frac_lowess = day_window / len(cmems_ts)  #  10 days window
-                    frac_loess = 1 / day_window #  7 days window    fc = 1/Scale
+            #     # TGs
+            #     # filt_lowess = sm.nonparametric.lowess(tg_ts['demean'], tg_ts['time'], frac=frac_lowess, return_sorted=False)
+            #     filt_loess_tg = loess.loess_smooth_handmade(tg_ts['demean'].values, frac_loess)
+            #     tg_ts['demean_filtered'] = filt_loess_tg
 
-                    # CMEMS
-                    # filt_lowess = sm.nonparametric.lowess(cmems_ts['demean'], cmems_ts['time'], frac=frac_lowess, return_sorted=False)
-                    filt_loess_cmems = loess.loess_smooth_handmade(alt_ts['demean'].values, frac_loess)
-                    alt_ts['demean_filtered'] = filt_loess_cmems
+            #     # Add the stations with less than 20% of NaNs
+            #     nans_percentage.append(tg_ts_nans)
 
-                    # TGs
-                    # filt_lowess = sm.nonparametric.lowess(tg_ts['demean'], tg_ts['time'], frac=frac_lowess, return_sorted=False)
-                    filt_loess_tg = loess.loess_smooth_handmade(tg_ts['demean'].values, frac_loess)
-                    tg_ts['demean_filtered'] = filt_loess_tg
+            # else:
 
-                    # Add the stations with less than 20% of NaNs
-                    nans_percentage.append(tg_ts_nans)
+            #     empty_stations.append(station)
+            #     print(f"Station {sorted_names[station]} has no CMEMS data")
+            #     print(f"Station {sorted_names[station]} has more than 20% of NaNs")
+            #     continue
 
-                else:
+            # Calculate correlation between cmems and tg
+            corr_swot_l3 = swot_l3[demean].corr(tg_ts[demean])
+            corr_cmems_eur = cmems_eur[demean].corr(tg_ts[demean])
+            corr_cmems_glo = cmems_glo[demean].corr(tg_ts[demean])
+            corr_duacs_swot_l4 = duacs_swot_l4[demean].corr(tg_ts[demean])
 
-                    empty_stations.append(station)
-                    print(f"Station {sorted_names[station]} has no CMEMS data")
-                    print(f"Station {sorted_names[station]} has more than 20% of NaNs")
-                    continue
+            # Calculate RMSD between cmems and tg
+            rmsd_swot_l3 = np.sqrt(np.mean((swot_l3[demean] - tg_ts[demean]) ** 2))
+            rmsd_cmems_eur = np.sqrt(np.mean((cmems_eur[demean] - tg_ts[demean]) ** 2))
+            rmsd_cmems_glo = np.sqrt(np.mean((cmems_glo[demean] - tg_ts[demean]) ** 2))
+            rmsd_duacs_swot_l4 = np.sqrt(np.mean((duacs_swot_l4[demean] - tg_ts[demean]) ** 2))
 
-                # Calculate correlation between cmems and tg
-                correlation = alt_ts[demean].corr(tg_ts[demean])
+            # Calculate variances of products and tg
+            var_swot_l3 = swot_l3[demean].var()
+            var_cmems_eur = cmems_eur[demean].var()
+            var_cmems_glo = cmems_glo[demean].var()
+            var_duacs_swot_l4 = duacs_swot_l4[demean].var()
+            var_tg = tg_ts[demean].var()
 
-                # Calculate RMSD between cmems and tg
-                rmsd = np.sqrt(np.mean((alt_ts[demean] - tg_ts[demean]) ** 2))
-
-                # Calculate variances of cmems and tg
-                var_cmems_df = alt_ts[demean].var()
-                var_tg_df = tg_ts['demean'].var()
-
-                # Calculate the variance of the difference between cmems and tg
-                var_diff_df = (alt_ts[demean] - tg_ts[demean]).var()
-
-                rmsds.append(rmsd)
-
-                correlations.append(correlation)
-                var_tg.append(var_tg_df)
-                var_CMEMS.append(var_cmems_df)
-                var_diff.append(var_diff_df)
-
-                # Num days used
-                days_used_per_gauge.append(len(alt_ts))
-
-                # Average min distances
-                min_distances.append(alt_ts['min_distance'].min())
-
-                # PLOTTING TIME SERIES
-                # plt.figure(figsize=(10, 6))
-                # plt.plot(alt_ts['time'], cmems_ts[demean], label=f'{product_name}',  linewidth=3, c='b')
-                # plt.plot(cmems_ts['time'], cmems_ts['demean'], label=f'{product_name} unfiltered', linestyle='--', c='b', alpha=0.5)
-
-                # # plt.scatter(cmems_ts['time'], cmems_ts[demean])
-                # plt.plot(tg_ts['time'], tg_ts[demean], label='TGs',  linewidth=3, c='g')
-                # plt.plot(tg_ts['time'], tg_ts['demean'], label='TGs unfiltered', linestyle='--', c='g', alpha=0.5)
-
-                # # plt.scatter(tg_ts['time'], tg_ts[demean])
-                # plt.title(f'{sorted_names[station]}, {rad}km_radius, {day_window}dLoess, {product_name}')
-                # plt.legend()
-                # plt.xticks(rotation=20)
-                # plt.yticks(np.arange(-15, 18, 3))
-
-                # # plt.xlabel('time')
-                # plt.grid(True, alpha=0.2)
-                # plt.ylabel('SSHA (cm)')
-                # plt.tick_params(axis='both', which='major', labelsize=11)
-                # plt.text(0.95, 0.1, f'RMSD: {rmsd:.2f} cm', fontsize=12, color='black', 
-                #          transform=plt.gca().transAxes, ha='right', bbox=dict(facecolor='white', alpha=0.5))
-                # plt.text(0.95, 0.2, f'CORRELATION: {correlation:.2f}', fontsize=12, color='black', 
-                #          transform=plt.gca().transAxes, ha='right', bbox=dict(facecolor='white', alpha=0.5))
+            # Calculate the variance of the difference between cmems and tg
+            var_diff_swot_l3 = (swot_l3[demean] - tg_ts[demean]).var()
+            var_diff_cmems_eur = (cmems_eur[demean] - tg_ts[demean]).var()
+            var_diff_cmems_glo = (cmems_glo[demean] - tg_ts[demean]).var()
+            var_diff_duacs_swot_l4 = (duacs_swot_l4[demean] - tg_ts[demean]).var()
 
 
-                # plt.savefig(f'{plot_path}{sorted_names[station]}_{rad}km_{day_window}dLoess_{product_name}.png')
+            rmsds.append(rmsd)
+            correlations.append(correlation)
+            var_tg.append(var_tg_df)
+            var_CMEMS.append(var_cmems_df)
+            var_diff.append(var_diff_df)
+
+            # Num days used
+            days_used_per_gauge.append(len(alt_ts))
+
+            # Average min distances
+            min_distances.append(alt_ts['min_distance'].min())
+
+            # PLOTTING TIME SERIES
+            # plt.figure(figsize=(10, 6))
+            # plt.plot(alt_ts['time'], cmems_ts[demean], label=f'{product_name}',  linewidth=3, c='b')
+            # plt.plot(cmems_ts['time'], cmems_ts['demean'], label=f'{product_name} unfiltered', linestyle='--', c='b', alpha=0.5)
+
+            # # plt.scatter(cmems_ts['time'], cmems_ts[demean])
+            # plt.plot(tg_ts['time'], tg_ts[demean], label='TGs',  linewidth=3, c='g')
+            # plt.plot(tg_ts['time'], tg_ts['demean'], label='TGs unfiltered', linestyle='--', c='g', alpha=0.5)
+
+            # # plt.scatter(tg_ts['time'], tg_ts[demean])
+            # plt.title(f'{sorted_names[station]}, {rad}km_radius, {day_window}dLoess, {product_name}')
+            # plt.legend()
+            # plt.xticks(rotation=20)
+            # plt.yticks(np.arange(-15, 18, 3))
+
+            # # plt.xlabel('time')
+            # plt.grid(True, alpha=0.2)
+            # plt.ylabel('SSHA (cm)')
+            # plt.tick_params(axis='both', which='major', labelsize=11)
+            # plt.text(0.95, 0.1, f'RMSD: {rmsd:.2f} cm', fontsize=12, color='black', 
+            #          transform=plt.gca().transAxes, ha='right', bbox=dict(facecolor='white', alpha=0.5))
+            # plt.text(0.95, 0.2, f'CORRELATION: {correlation:.2f}', fontsize=12, color='black', 
+            #          transform=plt.gca().transAxes, ha='right', bbox=dict(facecolor='white', alpha=0.5))
 
 
-                # MAP PLOT OF CMEMS LOCATIONS OBTAINED FROM EACH GAUGE!
-                # fig, ax = plt.subplots(figsize=(10.5, 11), subplot_kw=dict(projection=ccrs.PlateCarree()))
+            # plt.savefig(f'{plot_path}{sorted_names[station]}_{rad}km_{day_window}dLoess_{product_name}.png')
 
-                # # Set the extent to focus on the defined lon-lat box
-                # ax.set_extent(lolabox, crs=ccrs.PlateCarree())
 
-                # # Add scatter plot for specific locations
-                # ax.scatter(tg_ts['longitude'][0], tg_ts['latitude'][0], c='black', marker='o', s=50, transform=ccrs.Geodetic(), label='Tide Gauge')
-                # ax.scatter(cmems_ts['cmems_lon_within_radius'][0], cmems_ts['cmems_lat_within_radius'][0], c='blue', marker='o', s=50, transform=ccrs.Geodetic(), label='CMEMS data')
+            # MAP PLOT OF CMEMS LOCATIONS OBTAINED FROM EACH GAUGE!
+            # fig, ax = plt.subplots(figsize=(10.5, 11), subplot_kw=dict(projection=ccrs.PlateCarree()))
 
-                # # Add coastlines and gridlines
-                # ax.coastlines()
-                # ax.gridlines(draw_labels=True)
+            # # Set the extent to focus on the defined lon-lat box
+            # ax.set_extent(lolabox, crs=ccrs.PlateCarree())
 
-                # ax.legend(loc="upper left")
-                # ax.title(f'Station {sorted_names[station]}')
+            # # Add scatter plot for specific locations
+            # ax.scatter(tg_ts['longitude'][0], tg_ts['latitude'][0], c='black', marker='o', s=50, transform=ccrs.Geodetic(), label='Tide Gauge')
+            # ax.scatter(cmems_ts['cmems_lon_within_radius'][0], cmems_ts['cmems_lat_within_radius'][0], c='blue', marker='o', s=50, transform=ccrs.Geodetic(), label='CMEMS data')
+
+            # # Add coastlines and gridlines
+            # ax.coastlines()
+            # ax.gridlines(draw_labels=True)
+
+            # ax.legend(loc="upper left")
+            # ax.title(f'Station {sorted_names[station]}')
 
         except (KeyError, ValueError):  # Handle cases where station might not exist in df or time has NaNs
             # Print message or log the issue and save the station index for dropping the empty stations
