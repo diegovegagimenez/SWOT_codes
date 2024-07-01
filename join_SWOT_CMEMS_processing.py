@@ -433,10 +433,10 @@ for rad in dmedia:
     CMEMS_NRT_GLO = prod_df[prod_df['product']==products_names[2]]
     SWOT_L3 = prod_df[prod_df['product']==products_names[3]]
 
-    DUACS_SWOT_L4 = DUACS_SWOT_L4[['station', 'ssha', 'min_distance']]
-    CMEMS_NRT_EUR = CMEMS_NRT_EUR[['station', 'ssha', 'min_distance']]
-    CMEMS_NRT_GLO = CMEMS_NRT_GLO[['station', 'ssha', 'min_distance']]
-    SWOT_L3 = SWOT_L3[['station', 'ssha', 'min_distance']] 
+    DUACS_SWOT_L4 = DUACS_SWOT_L4[['station', 'ssha', 'min_distance', 'n_val']]
+    CMEMS_NRT_EUR = CMEMS_NRT_EUR[['station', 'ssha', 'min_distance', 'n_val']]
+    CMEMS_NRT_GLO = CMEMS_NRT_GLO[['station', 'ssha', 'min_distance', 'n_val']]
+    SWOT_L3 = SWOT_L3[['station', 'ssha', 'min_distance', 'n_val']] 
     df_tg_p1 = df_tg[['station', 'ssha']]
 
     DUACS_SWOT_L4 = DUACS_SWOT_L4[(DUACS_SWOT_L4.index >= min_time) & (DUACS_SWOT_L4.index <= max_time)]
@@ -445,10 +445,10 @@ for rad in dmedia:
     SWOT_L3 = SWOT_L3[(SWOT_L3.index >= min_time) & (SWOT_L3.index <= max_time)]
     df_tg_p2 = df_tg_p1[(df_tg_p1.index >= min_time) & (df_tg_p1.index <= max_time)]
 
-    DUACS_SWOT_L4 = DUACS_SWOT_L4.rename(columns={'ssha': 'DUACS (SWOT_L4)', 'min_distance':"min_distance_duacs_swot_l4"})
-    CMEMS_NRT_EUR = CMEMS_NRT_EUR.rename(columns={'ssha': 'CMEMS_NRT_EUR', 'min_distance': 'min_distance_CMEMS_EUR'})
-    CMEMS_NRT_GLO = CMEMS_NRT_GLO.rename(columns={'ssha': 'CMEMS_NRT_GLO', 'min_distance': 'min_distance_CMEMS_GLO'})
-    SWOT_L3 = SWOT_L3.rename(columns={'ssha': 'SWOT L3', 'min_distance': 'min_distance_swot_l3'})
+    DUACS_SWOT_L4 = DUACS_SWOT_L4.rename(columns={'ssha': 'DUACS (SWOT_L4)', 'min_distance':"min_distance_duacs_swot_l4", 'n_val': 'n_val_duacs_swot_l4'})
+    CMEMS_NRT_EUR = CMEMS_NRT_EUR.rename(columns={'ssha': 'CMEMS_NRT_EUR', 'min_distance': 'min_distance_cmems_eur', 'n_val': 'n_val_cmems_eur'})
+    CMEMS_NRT_GLO = CMEMS_NRT_GLO.rename(columns={'ssha': 'CMEMS_NRT_GLO', 'min_distance': 'min_distance_cmems_glo', 'n_val': 'n_val_cmems_glo'})
+    SWOT_L3 = SWOT_L3.rename(columns={'ssha': 'SWOT L3', 'min_distance': 'min_distance_swot_l3', 'n_val': 'n_val_swot_l3'})
     df_tg_p3 = df_tg_p2.rename(columns={'ssha': 'TG'})
 
     # MERGE ALL DATAFRAMES-----------------------------------------------------------------------------------------------------
@@ -498,6 +498,11 @@ for rad in dmedia:
     min_distances_cmems_glo = []
     min_distances_duacs_swot_l4 = []
 
+    n_val_swot_l3 = []
+    n_val_cmems_eur = []
+    n_val_cmems_glo = []
+    n_val_duacs_swot_l4 = []
+
     lolabox = [1, 8, 35, 45]
 
     # Define the column name for the demeaned values according if the data is filtered or not
@@ -522,10 +527,10 @@ for rad in dmedia:
 
                 # SUBSTRACT THE MEAN VALUE OF EACH TIME SERIE FOR COMPARING
                 tg_ts = process_ts(ssh_station[['time', 'TG']], 'TG')
-                cmems_eur = process_ts(ssh_station[['time', 'CMEMS_NRT_EUR', 'min_distance_CMEMS_EUR']], 'CMEMS_NRT_EUR')
-                cmems_glo = process_ts(ssh_station[['time', 'CMEMS_NRT_GLO', 'min_distance_CMEMS_GLO']], 'CMEMS_NRT_GLO')
-                swot_l3 = process_ts(ssh_station[['time', 'SWOT L3', 'min_distance_swot_l3']], 'SWOT L3')
-                duacs_swot_l4 = process_ts(ssh_station[['time', 'DUACS (SWOT_L4)', 'min_distance_duacs_swot_l4']], 'DUACS (SWOT_L4)')
+                cmems_eur = process_ts(ssh_station[['time', 'CMEMS_NRT_EUR', 'min_distance_cmems_eur', 'n_val_cmems_eur']], 'CMEMS_NRT_EUR')
+                cmems_glo = process_ts(ssh_station[['time', 'CMEMS_NRT_GLO', 'min_distance_cmems_glo', 'n_val_cmems_glo']], 'CMEMS_NRT_GLO')
+                swot_l3 = process_ts(ssh_station[['time', 'SWOT L3', 'min_distance_swot_l3', 'n_val_swot_l3']], 'SWOT L3')
+                duacs_swot_l4 = process_ts(ssh_station[['time', 'DUACS (SWOT_L4)', 'min_distance_duacs_swot_l4', 'n_val_duacs_swot_l4']], 'DUACS (SWOT_L4)')
 
                 if tg_ts is None or cmems_eur is None or cmems_glo is None or swot_l3 is None or duacs_swot_l4 is None:
                     empty_stations.append(station_name)
@@ -539,7 +544,6 @@ for rad in dmedia:
 
                 # Calculate correlation between cmems and tg
                 corr_swot_l3 = swot_l3[demean].corr(tg_ts[demean])
-                print(f'Correlation between SWOT L3 and TG: {corr_swot_l3}')
                 corr_cmems_eur = cmems_eur[demean].corr(tg_ts[demean])
                 corr_cmems_glo = cmems_glo[demean].corr(tg_ts[demean])
                 corr_duacs_swot_l4 = duacs_swot_l4[demean].corr(tg_ts[demean])
@@ -593,9 +597,15 @@ for rad in dmedia:
 
                 # Average min distances
                 min_distances_swot_l3.append(swot_l3['min_distance_swot_l3'].min())
-                min_distances_cmems_eur.append(cmems_eur['min_distance_CMEMS_EUR'].min())
-                min_distances_cmems_glo.append(cmems_glo['min_distance_CMEMS_GLO'].min())
+                min_distances_cmems_eur.append(cmems_eur['min_distance_cmems_eur'].min())
+                min_distances_cmems_glo.append(cmems_glo['min_distance_cmems_glo'].min())
                 min_distances_duacs_swot_l4.append(duacs_swot_l4['min_distance_duacs_swot_l4'].min())
+
+                # Number of values used for the average
+                n_val_swot_l3.append(swot_l3['n_val_swot_l3'].mean())
+                n_val_cmems_eur.append(cmems_eur['n_val_cmems_eur'].mean())
+                n_val_cmems_glo.append(cmems_glo['n_val_cmems_glo'].mean())
+                n_val_duacs_swot_l4.append(duacs_swot_l4['n_val_duacs_swot_l4'].mean())
 
                 # PLOTTING TIME SERIES
                 # plt.figure(figsize=(10, 6))
@@ -674,58 +684,58 @@ for rad in dmedia:
     # n_val = [x for i, x in enumerate(n_val) if i not in empty_stations]
 
     table_all_swot_l3 = pd.DataFrame({'station': sorted_names_mod,
-                            'correlation': correlations_swot_l3,
-                            'rmsd': rmsds_swot_l3,
-                            'var_TG': var_tg,
-                            'var_CMEMS': var_swot_l3,
-                            'var_diff': var_diff_swot_l3,
-                            # 'num_cmems_points': n_val,
-                            'n_days': days_used_per_gauge_swot_l3,
+                            'correlation_swot_l3': correlations_swot_l3,
+                            'rmsd_swot_l3': rmsds_swot_l3,
+                            # 'var_TG': variances_tg,
+                            'var_swot_l3': variances_swot_l3,
+                            'var_diff_swot_l3': variances_diff_swot_l3,
+                            'num_points_swot_l3': n_val_swot_l3,
+                            'n_days_swot_l3': days_used_per_gauge_swot_l3,
                             'latitude': ordered_lat_mod,
                             'longitude': ordered_lon_mod,
-                            'min_distance': min_distances_swot_l3,
+                            'min_distance_swot_l3': min_distances_swot_l3,
                             # 'nans_percentage': nans_percentage
                             })
     
     table_all_cmems_eur = pd.DataFrame({'station': sorted_names_mod,
-                            'correlation': correlations_cmems_eur,
-                            'rmsd': rmsds_cmems_eur,
-                            'var_TG': var_tg,
-                            'var_CMEMS': variances_cmems_eur,
-                            'var_diff': variances_diff_cmems_eur,
-                            # 'num_cmems_points': n_val,
-                            'n_days': days_used_per_gauge_cmems_eur,
+                            'correlation_cmems_eur': correlations_cmems_eur,
+                            'rmsd_cmems_eur': rmsds_cmems_eur,
+                            # 'var_TG': variances_tg,
+                            'var_cmems_eur': variances_cmems_eur,
+                            'var_diff_cmems_eur': variances_diff_cmems_eur,
+                            'num_points_cmems_eur': n_val_cmems_eur,
+                            'n_days_cmems_eur': days_used_per_gauge_cmems_eur,
                             'latitude': ordered_lat_mod,
                             'longitude': ordered_lon_mod,
-                            'min_distance': min_distances_cmems_eur,
+                            'min_distance_cmems_eur': min_distances_cmems_eur,
                             # 'nans_percentage': nans_percentage
                             })
     
     table_all_cmems_glo = pd.DataFrame({'station': sorted_names_mod,
-                            'correlation': correlations_cmems_glo,
-                            'rmsd': rmsds_cmems_glo,
-                            'var_TG': var_tg,
-                            'var_CMEMS': variances_cmems_glo,
-                            'var_diff': variances_diff_cmems_glo,
-                            # 'num_cmems_points': n_val,
-                            'n_days': days_used_per_gauge_cmems_glo,
+                            'correlation_cmems_glo': correlations_cmems_glo,
+                            'rmsd_cmems_glo': rmsds_cmems_glo,
+                            # 'var_TG': variances_tg,
+                            'var_cmems_glo': variances_cmems_glo,
+                            'var_diff_cmems_glo': variances_diff_cmems_glo,
+                            'num_points_cmems_glo': n_val_cmems_glo,
+                            'n_days_cmems_glo': days_used_per_gauge_cmems_glo,
                             'latitude': ordered_lat_mod,
                             'longitude': ordered_lon_mod,
-                            'min_distance': min_distances_cmems_glo,
+                            'min_distance_cmems_glo': min_distances_cmems_glo,
                             # 'nans_percentage': nans_percentage
                             })
     
     table_all_duacs_swot_l4 = pd.DataFrame({'station': sorted_names_mod,
-                            'correlation': correlations_duacs_swot_l4,
-                            'rmsd': rmsds_duacs_swot_l4,
-                            'var_TG': var_tg,
-                            'var_CMEMS': variances_duacs_swot_l4,
-                            'var_diff': variances_diff_duacs_swot_l4,
-                            # 'num_cmems_points': n_val,
-                            'n_days': days_used_per_gauge_duacs_swot_l4,
+                            'correlation_duacs_swot_l4': correlations_duacs_swot_l4,
+                            'rmsd_duacs_swot_l4': rmsds_duacs_swot_l4,
+                            # 'var_TG': variances_tg,
+                            'var_CMEMS_duacs_swot_l4': variances_duacs_swot_l4,
+                            'var_diff_duacs_swot_l4': variances_diff_duacs_swot_l4,
+                            'num_points_duacs_swot_l4': n_val_duacs_swot_l4,
+                            'n_days_duacs_swot_l4': days_used_per_gauge_duacs_swot_l4,
                             'latitude': ordered_lat_mod,
                             'longitude': ordered_lon_mod,
-                            'min_distance': min_distances_duacs_swot_l4,
+                            'min_distance_duacs_swot_l4': min_distances_duacs_swot_l4,
                             # 'nans_percentage': nans_percentage
                             })
 
@@ -771,6 +781,11 @@ for rad in dmedia:
                                 'min_distance_cmems_eur': np.mean(min_distances_cmems_eur),
                                 'min_distance_cmems_glo': np.mean(min_distances_cmems_glo),
                                 'min_distance_duacs_swot_l4': np.mean(min_distances_duacs_swot_l4),
+
+                                'n_val_swot_l3': np.mean(n_val_swot_l3),
+                                'n_val_cmems_eur': np.mean(n_val_cmems_eur),
+                                'n_val_cmems_glo': np.mean(n_val_cmems_glo),
+                                'n_val_duacs_swot_l4': np.mean(n_val_duacs_swot_l4),
                                 
                                 # 'var_tg': np.mean(var_tg),
 
@@ -780,6 +795,9 @@ for rad in dmedia:
 results_df = pd.DataFrame(results_rad_comparison)
 
 results_df
+
+# results_df[['radius', 'rmsd_swot_l3', 'rmsd_cmems_eur', 'rmsd_cmems_glo', 'rmsd_duacs_swot_l4',
+#             'correlation_swot_l3', 'correlation_cmems_eur', 'correlation_cmems_glo', 'correlation_duacs_swot_l4' ]]
 
 # results_df.to_excel('table_results_df_4_products.xlsx')
 
