@@ -106,9 +106,14 @@ products = [
     {   # SWOT L3
         'folder_path' : f'{path}swot_basic_1day/003_016_passv1.0/',  # Folder of 016 and 003 passes
         'plot_path': f'{path}figures/radius_comparisons_rmsdCorrected_7dLoess_SWOT/',
-        'product_name': 'SWOT L3'
-    }
-]
+        'product_name': 'SWOT L3'},
+
+    # {    # SWOT L3 UNSMOOTHED
+    #     'folder_path' : f'{path}ftp_data/unsmoothed/',  # Folder of 016 and 003 unsmoothed passes
+    #     'plot_path': f'{path}figures/radius_comparisons_rmsdCorrected_7dLoess_SWOT_unsmoothed/',
+    #     'product_name': 'SWOT L3 unsmoothed'
+    # }   
+    ]
 products_names = [product['product_name'] for product in products]
 
 # tide gauge data paths ---------------------------------------------------
@@ -116,6 +121,13 @@ data_tg = np.load(f'{path}mareografos/TGresiduals1d_2023_European_Seas_SWOT_FSP.
 names_tg = pd.read_csv(f'{path}mareografos/GLOBAL_TGstations_CMEMS_SWOT_FSP_Feb2024', header=None)
 
 
+# # Dropping wrong tide gauges (errors in tide gauge raw data)
+drop_tg_names = ['station_GL_TS_TG_TamarisTG',
+                'station_GL_TS_TG_BaieDuLazaretTG',
+                'station_GL_TS_TG_PortDeCarroTG',
+                'station_GL_TS_TG_CassisTG',
+                'station_MO_TS_TG_PORTO-CRISTO']
+    
 # ---------------------------------- READING TIDE GAUGE DATA --------------------------------------------------------
 
 sla = data_tg.get('resdacTOTday') * 100  # Convert to centimeters (cm)
@@ -202,6 +214,12 @@ for da in data_arrays:
 
 # Concatenate all DataFrames into a single DataFrame
 df_tg = pd.concat(df_tg, ignore_index=True)  # Keep NaNs for calculating the percentage of NaNs per station
+
+# Drop wrong stations from the tide gauge data
+df_tg = df_tg[~df_tg['station'].isin(drop_tg_names)].reset_index(drop=True)
+df_tg.set_index('time', inplace=True)
+df_tg.sort_index(inplace=True)
+df_tg_dropna = df_tg.dropna(how='any')
 
 # ------------------------ PROCESSING CMEMS DATA AROUND TG LOCATIONS --------------------------------------------------
 
@@ -377,24 +395,11 @@ for rad in dmedia:
     #     print((df2[df2['station_name'] == sorted_names[i]]['ssha']).isna().sum())
 
 
-    # # Dropping wrong tide gauges (errors in tide gauge raw data)
-    drop_tg_names = ['station_GL_TS_TG_TamarisTG',
-                    'station_GL_TS_TG_BaieDuLazaretTG',
-                    'station_GL_TS_TG_PortDeCarroTG',
-                    'station_GL_TS_TG_CassisTG',
-                    'station_MO_TS_TG_PORTO-CRISTO']
-    
     prod_df_dropna = prod_df_dropna[~prod_df_dropna['station'].isin(drop_tg_names)].reset_index(drop=True)
     prod_df = prod_df[~prod_df['station'].isin(drop_tg_names)].reset_index(drop=True)
     
     # # Convert from Series of ndarrays containing dates to Series of timestamps
     # prod_df_dropna['time'] = prod_df_dropna['time'].apply(lambda x: x[0])
-
-    # Drop wrong stations from the tide gauge data
-    df_tg = df_tg[~df_tg['station'].isin(drop_tg_names)].reset_index(drop=True)
-    df_tg.set_index('time', inplace=True)
-    df_tg.sort_index(inplace=True)
-    df_tg_dropna = df_tg.dropna(how='any')
 
 
     # Obtain the time overlapping time index that is not NaNs
@@ -432,23 +437,23 @@ for rad in dmedia:
     CMEMS_NRT_EUR = CMEMS_NRT_EUR[['station', 'ssha', 'min_distance']]
     CMEMS_NRT_GLO = CMEMS_NRT_GLO[['station', 'ssha', 'min_distance']]
     SWOT_L3 = SWOT_L3[['station', 'ssha', 'min_distance']] 
-    df_tg = df_tg[['station', 'ssha']]
+    df_tg_p1 = df_tg[['station', 'ssha']]
 
     DUACS_SWOT_L4 = DUACS_SWOT_L4[(DUACS_SWOT_L4.index >= min_time) & (DUACS_SWOT_L4.index <= max_time)]
     CMEMS_NRT_EUR = CMEMS_NRT_EUR[(CMEMS_NRT_EUR.index >= min_time) & (CMEMS_NRT_EUR.index <= max_time)]
     CMEMS_NRT_GLO = CMEMS_NRT_GLO[(CMEMS_NRT_GLO.index >= min_time) & (CMEMS_NRT_GLO.index <= max_time)]
     SWOT_L3 = SWOT_L3[(SWOT_L3.index >= min_time) & (SWOT_L3.index <= max_time)]
-    df_tg = df_tg[(df_tg.index >= min_time) & (df_tg.index <= max_time)]
+    df_tg_p2 = df_tg_p1[(df_tg_p1.index >= min_time) & (df_tg_p1.index <= max_time)]
 
     DUACS_SWOT_L4 = DUACS_SWOT_L4.rename(columns={'ssha': 'DUACS (SWOT_L4)', 'min_distance':"min_distance_duacs_swot_l4"})
     CMEMS_NRT_EUR = CMEMS_NRT_EUR.rename(columns={'ssha': 'CMEMS_NRT_EUR', 'min_distance': 'min_distance_CMEMS_EUR'})
     CMEMS_NRT_GLO = CMEMS_NRT_GLO.rename(columns={'ssha': 'CMEMS_NRT_GLO', 'min_distance': 'min_distance_CMEMS_GLO'})
     SWOT_L3 = SWOT_L3.rename(columns={'ssha': 'SWOT L3', 'min_distance': 'min_distance_swot_l3'})
-    df_tg = df_tg.rename(columns={'ssha': 'TG'})
+    df_tg_p3 = df_tg_p2.rename(columns={'ssha': 'TG'})
 
     # MERGE ALL DATAFRAMES-----------------------------------------------------------------------------------------------------
     # Reset index
-    df_tg_reset = df_tg.reset_index()
+    df_tg_reset = df_tg_p3.reset_index()
     SWOT_L3_reset = SWOT_L3.reset_index()
     CMEMS_NRT_EUR_reset = CMEMS_NRT_EUR.reset_index()
     CMEMS_NRT_GLO_reset = CMEMS_NRT_GLO.reset_index()
@@ -776,4 +781,28 @@ results_df = pd.DataFrame(results_rad_comparison)
 
 results_df
 
-results_df.to_excel('table_results_df_4_products.xlsx')
+# results_df.to_excel('table_results_df_4_products.xlsx')
+
+# plot the results
+
+plt.plot(results_df['radius'], results_df['rmsd_swot_l3'], label='SWOT L3')
+plt.scatter(results_df['radius'], results_df['rmsd_swot_l3'])
+
+plt.plot(results_df['radius'], results_df['rmsd_cmems_eur'], label='CMEMS NRT EUR')
+plt.scatter(results_df['radius'], results_df['rmsd_cmems_eur'])
+
+plt.plot(results_df['radius'], results_df['rmsd_cmems_glo'], label='CMEMS NRT GLO')
+plt.scatter(results_df['radius'], results_df['rmsd_cmems_glo'])
+
+plt.plot(results_df['radius'], results_df['rmsd_duacs_swot_l4'], label='DUACS SWOT L4')
+plt.scatter(results_df['radius'], results_df['rmsd_duacs_swot_l4'])
+
+# plt.plot(results_df['radius'], results_df['rmsd_swot_l3_unsmoothed'], label='SWOT L3 unsmoothed')
+# plt.scatter(results_df['radius'], results_df['rmsd_swot_l3_unsmoothed'])
+
+plt.xlabel('Radius (km)')
+plt.ylabel('RMSD (cm)')
+plt.title('RMSD vs Radius')
+plt.legend()
+plt.grid(alpha=0.2)
+plt.show()
