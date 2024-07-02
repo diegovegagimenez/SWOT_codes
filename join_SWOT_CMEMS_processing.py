@@ -25,6 +25,9 @@ dmedia = np.arange(20, 45, 5)  # Array of distances from 5 to 110 km in 5 km inc
 # Window size for the LOESS filter (in days)
 day_window = 7
 
+# % max of NaNs to drop stations 90-(90*0.2) = 72
+min_valid_vals = 70
+
 # Function for calculating the Haversine distance between two points
 def haversine(lon1, lat1, lon2, lat2):
     # convert decimal degrees to radians
@@ -64,7 +67,12 @@ def process_ts(time_series, product_n):
 
     time_series['demean_filtered'] = loess.loess_smooth_handmade(time_series['demean'].values, frac_loess)
 
-    return time_series
+    if len(time_series) < min_valid_vals:
+        empty_stations.append(station)
+        print(f"Station {sorted_names[station]} has more than 20% of NaNs")
+    
+    # Drop time series which have more than 20% of NaNs
+    return time_series if len(time_series) >= min_valid_vals else None
 
 def compute_combined_rmsd(rmsds, threshold):
 
@@ -81,6 +89,35 @@ def compute_combined_rmsd(rmsds, threshold):
     combined_rmsd = math.sqrt(mean_squared_rmsd)
 
     return combined_rmsd
+
+# Function to plot the time series of a tide gauge and a altimetry products
+def plot_time_series(alt_ts, tg_ts, rmsd, correlation, product_name, station, rad, plot_path):
+    plt.figure(figsize=(10, 6))
+    
+    demean = 'demean_filtered'
+    
+    plt.plot(alt_ts['time'], alt_ts[demean], label=f'{product_name}', linewidth=3, color='b')
+    plt.plot(alt_ts['time'], alt_ts['demean'], label=f'{product_name} unfiltered', linestyle='--', color='b', alpha=0.5)
+    
+    plt.plot(tg_ts['time'], tg_ts[demean], label='TGs', linewidth=3, color='g')
+    plt.plot(tg_ts['time'], tg_ts['demean'], label='TGs unfiltered', linestyle='--', color='g', alpha=0.5)
+    
+    plt.title(f'{sorted_names[station]}, {rad}km_radius, {day_window}dLoess, {product_name}')
+    plt.legend()
+    plt.xticks(rotation=20)
+    plt.yticks(np.arange(-15, 18, 3))
+    plt.grid(True, alpha=0.2)
+    plt.ylabel('SSHA (cm)')
+    plt.tick_params(axis='both', which='major', labelsize=11)
+    
+    plt.text(0.95, 0.1, f'RMSD: {rmsd:.2f} cm', fontsize=12, color='black', 
+             transform=plt.gca().transAxes, ha='right', bbox=dict(facecolor='white', alpha=0.5))
+    plt.text(0.95, 0.2, f'CORRELATION: {correlation:.2f}', fontsize=12, color='black', 
+             transform=plt.gca().transAxes, ha='right', bbox=dict(facecolor='white', alpha=0.5))
+    
+    plt.savefig(f'{plot_path}{sorted_names[station]}_{rad}km_{day_window}dLoess_{product_name}.png')
+    plt.show()
+
 
 # Path to the general SWOT data folder -----------------------------------------------------------------------------------
 path ='/home/dvega/anaconda3/work/SWOT/'
@@ -249,7 +286,7 @@ for rad in dmedia:
         for filename in nc_files:
             file_path = os.path.join(folder_path, filename)
 
-            if product_name == 'SWOT L3':  # ------------------------------------------------------------------------------------------
+            if product_name in ['SWOT L3', 'SWOT L3 unsmoothed']:  # ------------------------------------------------------------------------------------------
 
                 ds = xr.open_dataset(file_path)
 
@@ -416,7 +453,11 @@ for rad in dmedia:
     CMEMS_NRT_EUR_dropna = prod_df_dropna[prod_df_dropna['product']==products_names[1]]
     CMEMS_NRT_GLO_dropna = prod_df_dropna[prod_df_dropna['product']==products_names[2]]
     SWOT_L3_dropna = prod_df_dropna[prod_df_dropna['product']==products_names[3]]
+    # SWOT_L3_unsmoothed_dropna = prod_df_dropna[prod_df_dropna['product']==products_names[4]]
 
+    # min_time = max(DUACS_SWOT_L4_dropna.index.min(), CMEMS_NRT_EUR_dropna.index.min(), CMEMS_NRT_GLO_dropna.index.min(), SWOT_L3_dropna.index.min(), SWOT_L3_unsmoothed_dropna.index.min(), df_tg_dropna.index.min())
+    # max_time = min(DUACS_SWOT_L4_dropna.index.max(), CMEMS_NRT_EUR_dropna.index.max(), CMEMS_NRT_GLO_dropna.index.max(), SWOT_L3_dropna.index.max(), SWOT_L3_unsmoothed_dropna.index.max(), df_tg_dropna.index.max())
+    
     min_time = max(DUACS_SWOT_L4_dropna.index.min(), CMEMS_NRT_EUR_dropna.index.min(), CMEMS_NRT_GLO_dropna.index.min(), SWOT_L3_dropna.index.min(), df_tg_dropna.index.min())
     max_time = min(DUACS_SWOT_L4_dropna.index.max(), CMEMS_NRT_EUR_dropna.index.max(), CMEMS_NRT_GLO_dropna.index.max(), SWOT_L3_dropna.index.max(), df_tg_dropna.index.max())
     
@@ -432,23 +473,27 @@ for rad in dmedia:
     CMEMS_NRT_EUR = prod_df[prod_df['product']==products_names[1]]
     CMEMS_NRT_GLO = prod_df[prod_df['product']==products_names[2]]
     SWOT_L3 = prod_df[prod_df['product']==products_names[3]]
+    # SWOT_L3_unsmoothed = prod_df[prod_df['product']==products_names[4]]
 
     DUACS_SWOT_L4 = DUACS_SWOT_L4[['station', 'ssha', 'min_distance', 'n_val']]
     CMEMS_NRT_EUR = CMEMS_NRT_EUR[['station', 'ssha', 'min_distance', 'n_val']]
     CMEMS_NRT_GLO = CMEMS_NRT_GLO[['station', 'ssha', 'min_distance', 'n_val']]
-    SWOT_L3 = SWOT_L3[['station', 'ssha', 'min_distance', 'n_val']] 
+    SWOT_L3 = SWOT_L3[['station', 'ssha', 'min_distance', 'n_val']]
+    # SWOT_L3_unsmoothed = SWOT_L3_unsmoothed[['station', 'ssha', 'min_distance', 'n_val']]
     df_tg_p1 = df_tg[['station', 'ssha']]
 
     DUACS_SWOT_L4 = DUACS_SWOT_L4[(DUACS_SWOT_L4.index >= min_time) & (DUACS_SWOT_L4.index <= max_time)]
     CMEMS_NRT_EUR = CMEMS_NRT_EUR[(CMEMS_NRT_EUR.index >= min_time) & (CMEMS_NRT_EUR.index <= max_time)]
     CMEMS_NRT_GLO = CMEMS_NRT_GLO[(CMEMS_NRT_GLO.index >= min_time) & (CMEMS_NRT_GLO.index <= max_time)]
     SWOT_L3 = SWOT_L3[(SWOT_L3.index >= min_time) & (SWOT_L3.index <= max_time)]
+    # SWOT_L3_unsmoothed = SWOT_L3_unsmoothed[(SWOT_L3_unsmoothed.index >= min_time) & (SWOT_L3_unsmoothed.index <= max_time)]
     df_tg_p2 = df_tg_p1[(df_tg_p1.index >= min_time) & (df_tg_p1.index <= max_time)]
 
     DUACS_SWOT_L4 = DUACS_SWOT_L4.rename(columns={'ssha': 'DUACS (SWOT_L4)', 'min_distance':"min_distance_duacs_swot_l4", 'n_val': 'n_val_duacs_swot_l4'})
     CMEMS_NRT_EUR = CMEMS_NRT_EUR.rename(columns={'ssha': 'CMEMS_NRT_EUR', 'min_distance': 'min_distance_cmems_eur', 'n_val': 'n_val_cmems_eur'})
     CMEMS_NRT_GLO = CMEMS_NRT_GLO.rename(columns={'ssha': 'CMEMS_NRT_GLO', 'min_distance': 'min_distance_cmems_glo', 'n_val': 'n_val_cmems_glo'})
     SWOT_L3 = SWOT_L3.rename(columns={'ssha': 'SWOT L3', 'min_distance': 'min_distance_swot_l3', 'n_val': 'n_val_swot_l3'})
+    # SWOT_L3_unsmoothed = SWOT_L3_unsmoothed.rename(columns={'ssha': 'SWOT L3 unsmoothed', 'min_distance': 'min_distance_swot_l3_unsmoothed', 'n_val': 'n_val_swot_l3_unsmoothed'})
     df_tg_p3 = df_tg_p2.rename(columns={'ssha': 'TG'})
 
     # MERGE ALL DATAFRAMES-----------------------------------------------------------------------------------------------------
@@ -458,11 +503,15 @@ for rad in dmedia:
     CMEMS_NRT_EUR_reset = CMEMS_NRT_EUR.reset_index()
     CMEMS_NRT_GLO_reset = CMEMS_NRT_GLO.reset_index()
     DUACS_SWOT_L4_reset = DUACS_SWOT_L4.reset_index()
+    # SWOT_L3_unsmoothed_reset = SWOT_L3_unsmoothed.reset_index()
 
     matched_df = df_tg_reset.merge(SWOT_L3_reset, left_on=['time', 'station'], right_on=['time', 'station'])
     matched_df = matched_df.merge(CMEMS_NRT_EUR_reset, left_on=['time', 'station'], right_on=['time', 'station'])
     matched_df = matched_df.merge(CMEMS_NRT_GLO_reset, left_on=['time', 'station'], right_on=['time', 'station'])
     matched_df = matched_df.merge(DUACS_SWOT_L4_reset, left_on=['time', 'station'], right_on=['time', 'station'])
+    # matched_df = matched_df.merge(SWOT_L3_unsmoothed_reset, left_on=['time', 'station'], right_on=['time', 'station'])
+
+    # Drop rows which have more than 20% of valid values  90*0.2 = 18
 
     # ---------------- MANAGING COMPARISON BETWEEN TG AND SWO ------------------------------------------------
     empty_stations = []
@@ -471,37 +520,44 @@ for rad in dmedia:
     correlations_cmems_eur = []
     correlations_cmems_glo = []
     correlations_duacs_swot_l4 = []
+    correlations_swot_l3_unsmoothed = []
 
     rmsds_swot_l3 = []
     rmsds_cmems_eur = []
     rmsds_cmems_glo = []
     rmsds_duacs_swot_l4 = []
+    rmsds_swot_l3_unsmoothed = []
 
     variances_tg = []
     variances_swot_l3 = []
     variances_cmems_eur = []
     variances_cmems_glo = []
     variances_duacs_swot_l4 = []
+    variances_swot_l3_unsmoothed = []
 
     variances_diff_swot_l3 = []
     variances_diff_cmems_eur = []
     variances_diff_cmems_glo = []
     variances_diff_duacs_swot_l4 = []
+    variances_diff_swot_l3_unsmoothed = []
     
     days_used_per_gauge_swot_l3 = []
     days_used_per_gauge_cmems_eur = []
     days_used_per_gauge_cmems_glo = []
     days_used_per_gauge_duacs_swot_l4 = []
+    days_used_per_gauge_swot_l3_unsmoothed = []
 
     min_distances_swot_l3 = []
     min_distances_cmems_eur = []
     min_distances_cmems_glo = []
     min_distances_duacs_swot_l4 = []
+    min_distances_swot_l3_unsmoothed = []
 
     n_val_swot_l3 = []
     n_val_cmems_eur = []
     n_val_cmems_glo = []
     n_val_duacs_swot_l4 = []
+    n_val_swot_l3_unsmoothed = []
 
     lolabox = [1, 8, 35, 45]
 
@@ -531,8 +587,10 @@ for rad in dmedia:
                 cmems_glo = process_ts(ssh_station[['time', 'CMEMS_NRT_GLO', 'min_distance_cmems_glo', 'n_val_cmems_glo']], 'CMEMS_NRT_GLO')
                 swot_l3 = process_ts(ssh_station[['time', 'SWOT L3', 'min_distance_swot_l3', 'n_val_swot_l3']], 'SWOT L3')
                 duacs_swot_l4 = process_ts(ssh_station[['time', 'DUACS (SWOT_L4)', 'min_distance_duacs_swot_l4', 'n_val_duacs_swot_l4']], 'DUACS (SWOT_L4)')
+                # swot_l3_unsmoothed = process_ts(ssh_station[['time', 'SWOT L3 unsmoothed', 'min_distance_swot_l3_unsmoothed', 'n_val_swot_l3_unsmoothed']], 'SWOT L3 unsmoothed')
 
                 if tg_ts is None or cmems_eur is None or cmems_glo is None or swot_l3 is None or duacs_swot_l4 is None:
+                # if tg_ts is None or cmems_eur is None or cmems_glo is None or swot_l3 is None or duacs_swot_l4 is None or swot_l3_unsmoothed is None:
                     empty_stations.append(station_name)
                     print(f"One or more products missing for station {station_name}")
                     continue
@@ -547,18 +605,21 @@ for rad in dmedia:
                 corr_cmems_eur = cmems_eur[demean].corr(tg_ts[demean])
                 corr_cmems_glo = cmems_glo[demean].corr(tg_ts[demean])
                 corr_duacs_swot_l4 = duacs_swot_l4[demean].corr(tg_ts[demean])
+                # corr_swot_l3_unsmoothed = swot_l3_unsmoothed[demean].corr(tg_ts[demean])
 
                 # Calculate RMSD between cmems and tg
                 rmsd_swot_l3 = np.sqrt(np.mean((swot_l3[demean] - tg_ts[demean]) ** 2))
                 rmsd_cmems_eur = np.sqrt(np.mean((cmems_eur[demean] - tg_ts[demean]) ** 2))
                 rmsd_cmems_glo = np.sqrt(np.mean((cmems_glo[demean] - tg_ts[demean]) ** 2))
                 rmsd_duacs_swot_l4 = np.sqrt(np.mean((duacs_swot_l4[demean] - tg_ts[demean]) ** 2))
+                # rmsd_swot_l3_unsmoothed = np.sqrt(np.mean((swot_l3_unsmoothed[demean] - tg_ts[demean]) ** 2))
 
                 # Calculate variances of products and tg
                 var_swot_l3 = swot_l3[demean].var()
                 var_cmems_eur = cmems_eur[demean].var()
                 var_cmems_glo = cmems_glo[demean].var()
                 var_duacs_swot_l4 = duacs_swot_l4[demean].var()
+                # var_swot_l3_unsmoothed = swot_l3_unsmoothed[demean].var()
                 var_tg = tg_ts[demean].var()
 
                 # Calculate the variance of the difference between cmems and tg
@@ -566,74 +627,61 @@ for rad in dmedia:
                 var_diff_cmems_eur = (cmems_eur[demean] - tg_ts[demean]).var()
                 var_diff_cmems_glo = (cmems_glo[demean] - tg_ts[demean]).var()
                 var_diff_duacs_swot_l4 = (duacs_swot_l4[demean] - tg_ts[demean]).var()
+                # var_diff_swot_l3_unsmoothed = (swot_l3_unsmoothed[demean] - tg_ts[demean]).var()
 
                 # Append the results to the lists
                 rmsds_swot_l3.append(rmsd_swot_l3)
                 rmsds_cmems_eur.append(rmsd_cmems_eur)
                 rmsds_cmems_glo.append(rmsd_cmems_glo)
                 rmsds_duacs_swot_l4.append(rmsd_duacs_swot_l4)
+                # rmsds_swot_l3_unsmoothed.append(rmsd_swot_l3_unsmoothed)
 
                 correlations_swot_l3.append(corr_swot_l3)
                 correlations_cmems_eur.append(corr_cmems_eur)
                 correlations_cmems_glo.append(corr_cmems_glo)
                 correlations_duacs_swot_l4.append(corr_duacs_swot_l4)
+                # correlations_swot_l3_unsmoothed.append(corr_swot_l3_unsmoothed)
 
                 variances_tg.append(var_tg)
                 variances_swot_l3.append(var_swot_l3)
                 variances_cmems_eur.append(var_cmems_eur)
                 variances_cmems_glo.append(var_cmems_glo)
                 variances_duacs_swot_l4.append(var_duacs_swot_l4)
+                # variances_swot_l3_unsmoothed.append(var_swot_l3_unsmoothed)
 
                 variances_diff_swot_l3.append(var_diff_swot_l3)
                 variances_diff_cmems_eur.append(var_diff_cmems_eur)
                 variances_diff_cmems_glo.append(var_diff_cmems_glo)
                 variances_diff_duacs_swot_l4.append(var_diff_duacs_swot_l4)
+                # variances_diff_swot_l3_unsmoothed.append(var_diff_swot_l3_unsmoothed)
 
                 # Num days used
                 days_used_per_gauge_swot_l3.append(len(swot_l3))
                 days_used_per_gauge_cmems_eur.append(len(cmems_eur))
                 days_used_per_gauge_cmems_glo.append(len(cmems_glo))
                 days_used_per_gauge_duacs_swot_l4.append(len(duacs_swot_l4))
+                # days_used_per_gauge_swot_l3_unsmoothed.append(len(swot_l3_unsmoothed))
 
                 # Average min distances
                 min_distances_swot_l3.append(swot_l3['min_distance_swot_l3'].min())
                 min_distances_cmems_eur.append(cmems_eur['min_distance_cmems_eur'].min())
                 min_distances_cmems_glo.append(cmems_glo['min_distance_cmems_glo'].min())
                 min_distances_duacs_swot_l4.append(duacs_swot_l4['min_distance_duacs_swot_l4'].min())
+                # min_distances_swot_l3_unsmoothed.append(swot_l3_unsmoothed['min_distance_swot_l3_unsmoothed'].min())
 
                 # Number of values used for the average
                 n_val_swot_l3.append(swot_l3['n_val_swot_l3'].mean())
                 n_val_cmems_eur.append(cmems_eur['n_val_cmems_eur'].mean())
                 n_val_cmems_glo.append(cmems_glo['n_val_cmems_glo'].mean())
                 n_val_duacs_swot_l4.append(duacs_swot_l4['n_val_duacs_swot_l4'].mean())
+                # n_val_swot_l3_unsmoothed.append(swot_l3_unsmoothed['n_val_swot_l3_unsmoothed'].mean())
 
                 # PLOTTING TIME SERIES
-                # plt.figure(figsize=(10, 6))
-                # plt.plot(alt_ts['time'], cmems_ts[demean], label=f'{product_name}',  linewidth=3, c='b')
-                # plt.plot(cmems_ts['time'], cmems_ts['demean'], label=f'{product_name} unfiltered', linestyle='--', c='b', alpha=0.5)
-
-                # # plt.scatter(cmems_ts['time'], cmems_ts[demean])
-                # plt.plot(tg_ts['time'], tg_ts[demean], label='TGs',  linewidth=3, c='g')
-                # plt.plot(tg_ts['time'], tg_ts['demean'], label='TGs unfiltered', linestyle='--', c='g', alpha=0.5)
-
-                # # plt.scatter(tg_ts['time'], tg_ts[demean])
-                # plt.title(f'{sorted_names[station]}, {rad}km_radius, {day_window}dLoess, {product_name}')
-                # plt.legend()
-                # plt.xticks(rotation=20)
-                # plt.yticks(np.arange(-15, 18, 3))
-
-                # # plt.xlabel('time')
-                # plt.grid(True, alpha=0.2)
-                # plt.ylabel('SSHA (cm)')
-                # plt.tick_params(axis='both', which='major', labelsize=11)
-                # plt.text(0.95, 0.1, f'RMSD: {rmsd:.2f} cm', fontsize=12, color='black', 
-                #          transform=plt.gca().transAxes, ha='right', bbox=dict(facecolor='white', alpha=0.5))
-                # plt.text(0.95, 0.2, f'CORRELATION: {correlation:.2f}', fontsize=12, color='black', 
-                #          transform=plt.gca().transAxes, ha='right', bbox=dict(facecolor='white', alpha=0.5))
-
-
-                # plt.savefig(f'{plot_path}{sorted_names[station]}_{rad}km_{day_window}dLoess_{product_name}.png')
-
+                # plot_time_series(swot_l3, tg_ts, rmsd_swot_l3, corr_swot_l3, product_name='SWOT L3', station=station, rad=rad, plot_path=products[3]['plot_path'])
+                # plot_time_series(cmems_eur, tg_ts, rmsd_cmems_eur, corr_cmems_eur, product_name='CMEMS NRT EUR', station=station, rad=rad, plot_path=products[1]['plot_path'])
+                # plot_time_series(cmems_glo, tg_ts, rmsd_cmems_glo, corr_cmems_glo, product_name='CMEMS NRT GLO', station=station, rad=rad,  plot_path=products[2]['plot_path'])
+                # plot_time_series(duacs_swot_l4, tg_ts, rmsd_duacs_swot_l4, corr_duacs_swot_l4, product_name='DUACS SWOT L4', station=station, rad=rad, plot_path=products[0]['plot_path'])
+                # # plot_time_series(swot_l3_unsmoothed, tg_ts)
 
                 # MAP PLOT OF CMEMS LOCATIONS OBTAINED FROM EACH GAUGE!
                 # fig, ax = plt.subplots(figsize=(10.5, 11), subplot_kw=dict(projection=ccrs.PlateCarree()))
@@ -660,22 +708,6 @@ for rad in dmedia:
             # print(f"Station {sorted_names[station]} not found in CMEMS data or time series has NaNs")
             continue  # Skip to the next iteration
 
-
-    # n_val = []  # List to store average number of altimetry values per station
-
-    # # Loop through each station name
-    # for station_name in sorted_names:
-    #     # Filter data for the current station
-    #     station_data = prod_df[prod_df['station_name'] == station_name]
-
-    #     # Calculate the average number of CMEMS values used within the radius (if data exists)
-    #     if not station_data.empty:  # Check if DataFrame is empty
-    #         n_val_avg = np.mean(station_data['n_val'])  # Access 'n_val' column directly
-    #     else:
-    #         n_val_avg = np.nan  # Assign NaN for missing data
-
-    #     n_val.append(round(n_val_avg, 2))  # Round n_val_avg to 2 decimals
-
     # empty_stations = [5, 7, 11, 14, 17]
     # Drop stations variables with no CMEMS data for matching with the table
     sorted_names_mod = [x for i, x in enumerate(sorted_names) if i not in empty_stations]
@@ -697,6 +729,7 @@ for rad in dmedia:
                             # 'nans_percentage': nans_percentage
                             })
     
+    
     table_all_cmems_eur = pd.DataFrame({'station': sorted_names_mod,
                             'correlation_cmems_eur': correlations_cmems_eur,
                             'rmsd_cmems_eur': rmsds_cmems_eur,
@@ -711,6 +744,7 @@ for rad in dmedia:
                             # 'nans_percentage': nans_percentage
                             })
     
+
     table_all_cmems_glo = pd.DataFrame({'station': sorted_names_mod,
                             'correlation_cmems_glo': correlations_cmems_glo,
                             'rmsd_cmems_glo': rmsds_cmems_glo,
@@ -725,6 +759,7 @@ for rad in dmedia:
                             # 'nans_percentage': nans_percentage
                             })
     
+    
     table_all_duacs_swot_l4 = pd.DataFrame({'station': sorted_names_mod,
                             'correlation_duacs_swot_l4': correlations_duacs_swot_l4,
                             'rmsd_duacs_swot_l4': rmsds_duacs_swot_l4,
@@ -738,7 +773,25 @@ for rad in dmedia:
                             'min_distance_duacs_swot_l4': min_distances_duacs_swot_l4,
                             # 'nans_percentage': nans_percentage
                             })
+    
+    # table_all_swot_l3_unsmoothed = pd.DataFrame({'station': sorted_names_mod,
+    #                         'correlation_swot_l3_unsmoothed': correlations_swot_l3_unsmoothed,
+    #                         'rmsd_swot_l3_unsmoothed': rmsds_swot_l3_unsmoothed,
+    #                         # 'var_TG': variances_tg,
+    #                         'var_swot_l3_unsmoothed': variances_swot_l3_unsmoothed,
+    #                         'var_diff_swot_l3_unsmoothed': variances_diff_swot_l3_unsmoothed,
+    #                         'num_points_swot_l3_unsmoothed': n_val_swot_l3_unsmoothed,
+    #                         'n_days_swot_l3_unsmoothed': days_used_per_gauge_swot_l3_unsmoothed,
+    #                         'latitude': ordered_lat_mod,
+    #                         'longitude': ordered_lon_mod,
+    #                         'min_distance_swot_l3_unsmoothed': min_distances_swot_l3_unsmoothed,
+    #                         # 'nans_percentage': nans_percentage
+    #                         })
 
+    table_all_swot_l3
+    table_all_cmems_eur
+    table_all_cmems_glo
+    table_all_duacs_swot_l4
 
     # Average RMSD values taking in account the non-linear behaviour of the RMSD
     # Delete the wrong rows/tgs from rmsds
@@ -756,40 +809,43 @@ for rad in dmedia:
                                 'rmsd_cmems_eur': combined_rmsd_cmems_eur,
                                 'rmsd_cmems_glo': combined_rmsd_cmems_glo,
                                 'rmsd_duacs_swot_l4': combined_rmsd_duacs_swot_l4,
+                                # 'rmsd_swot_l3_unsmoothed': np.mean(rmsds_swot_l3_unsmoothed),
 
                                 'n_tg_used_swot_l3': len(table_all_swot_l3),
                                 'n_tg_used_cmems_eur': len(table_all_cmems_eur),
                                 'n_tg_used_cmems_glo': len(table_all_cmems_glo),
                                 'n_tg_used_duacs_swot_l4': len(table_all_duacs_swot_l4),
+                                # 'n_tg_used_swot_l3_unsmoothed': len(table_all_swot_l3_unsmoothed),
 
                                 'avg_days_used_swot_l3':np.mean(days_used_per_gauge_swot_l3),
                                 'avg_days_used_cmems_eur':np.mean(days_used_per_gauge_cmems_eur),
                                 'avg_days_used_cmems_glo':np.mean(days_used_per_gauge_cmems_glo),
                                 'avg_days_used_duacs_swot_l4':np.mean(days_used_per_gauge_duacs_swot_l4),
+                                'avg_days_used_swot_l3_unsmoothed':np.mean(days_used_per_gauge_swot_l3_unsmoothed),
 
                                 'correlation_swot_l3': np.mean(correlations_swot_l3),
                                 'correlation_cmems_eur': np.mean(correlations_cmems_eur),
                                 'correlation_cmems_glo': np.mean(correlations_cmems_glo),
                                 'correlation_duacs_swot_l4': np.mean(correlations_duacs_swot_l4),
+                                # 'correlation_swot_l3_unsmoothed': np.mean(correlations_swot_l3_unsmoothed),
 
                                 'var_diff_swot_l3': np.mean(var_diff_swot_l3),
                                 'var_diff_cmems_eur': np.mean(var_diff_cmems_eur),
                                 'var_diff_cmems_glo': np.mean(var_diff_cmems_glo),
                                 'var_diff_duacs_swot_l4': np.mean(var_diff_duacs_swot_l4),
+                                # 'var_diff_swot_l3_unsmoothed': np.mean(var_diff_swot_l3_unsmoothed),
 
                                 'min_distance_swot': np.mean(min_distances_swot_l3),
                                 'min_distance_cmems_eur': np.mean(min_distances_cmems_eur),
                                 'min_distance_cmems_glo': np.mean(min_distances_cmems_glo),
                                 'min_distance_duacs_swot_l4': np.mean(min_distances_duacs_swot_l4),
+                                # 'min_distance_swot_l3_unsmoothed': np.mean(min_distances_swot_l3_unsmoothed),
 
                                 'n_val_swot_l3': np.mean(n_val_swot_l3),
                                 'n_val_cmems_eur': np.mean(n_val_cmems_eur),
                                 'n_val_cmems_glo': np.mean(n_val_cmems_glo),
                                 'n_val_duacs_swot_l4': np.mean(n_val_duacs_swot_l4),
-                                
-                                # 'var_tg': np.mean(var_tg),
-
-                                # 'n_stations': len(sorted_names_mod)
+                                # 'n_val_swot_l3_unsmoothed': np.mean(n_val_swot_l3_unsmoothed),
                                 })
 
 results_df = pd.DataFrame(results_rad_comparison)
@@ -799,7 +855,7 @@ results_df
 # results_df[['radius', 'rmsd_swot_l3', 'rmsd_cmems_eur', 'rmsd_cmems_glo', 'rmsd_duacs_swot_l4',
 #             'correlation_swot_l3', 'correlation_cmems_eur', 'correlation_cmems_glo', 'correlation_duacs_swot_l4' ]]
 
-# results_df.to_excel('table_results_df_4_products.xlsx')
+results_df.to_excel('results_df_5_prod_n_vals.xlsx')
 
 # plot the results
 
@@ -824,3 +880,5 @@ plt.title('RMSD vs Radius')
 plt.legend()
 plt.grid(alpha=0.2)
 plt.show()
+
+# plt.savefig('rmsd_vs_radius_5_prod.png')
