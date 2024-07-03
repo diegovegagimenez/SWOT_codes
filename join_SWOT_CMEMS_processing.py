@@ -20,7 +20,7 @@ import math
 strategy = 0
 
 # Maximum distance from each CMEMS point to the tide gauge location
-dmedia = np.arange(20, 45, 5)  # Array of distances from 5 to 110 km in 5 km increments
+dmedia = np.arange(20, 100, 5)  # Array of distances from 5 to 110 km in 5 km increments
 
 # Window size for the LOESS filter (in days)
 day_window = 7
@@ -117,6 +117,12 @@ def plot_time_series(alt_ts, tg_ts, rmsd, correlation, product_name, station, ra
     
     plt.savefig(f'{plot_path}{sorted_names[station]}_{rad}km_{day_window}dLoess_{product_name}.png')
     plt.show()
+
+# Function to calculate the errors of combined RMSD values
+def bootstrap_rmsd(data, num_bootstrap=1000):
+    bootstrap_samples = np.random.choice(data, (num_bootstrap, len(data)), replace=True)
+    bootstrap_rmsd = np.mean(bootstrap_samples, axis=1)
+    return bootstrap_rmsd
 
 
 # Path to the general SWOT data folder -----------------------------------------------------------------------------------
@@ -263,6 +269,12 @@ df_tg_dropna = df_tg.dropna(how='any')
 lolabox = [-2, 8, 35, 45]
 
 results_rad_comparison = []  # List to store results for each radius
+
+# Create empty lists to store errors for each radius
+errors_swot_l3 = []
+errors_cmems_eur = []
+errors_cmems_glo = []
+errors_duacs_swot_l4 = [] 
 
 # Loop through each radius size
 for rad in dmedia:
@@ -528,6 +540,8 @@ for rad in dmedia:
     rmsds_duacs_swot_l4 = []
     rmsds_swot_l3_unsmoothed = []
 
+
+
     variances_tg = []
     variances_swot_l3 = []
     variances_cmems_eur = []
@@ -715,6 +729,12 @@ for rad in dmedia:
     ordered_lon_mod = [x for i, x in enumerate(ordered_lon) if i not in empty_stations] 
     # n_val = [x for i, x in enumerate(n_val) if i not in empty_stations]
 
+    # apply bootstrap method to calculate the confidence interval
+    rmsds_error_swot_l3 = bootstrap_rmsd(rmsds_swot_l3)
+    rmsds_error_cmems_eur = bootstrap_rmsd(rmsds_cmems_eur)
+    rmsds_error_cmems_glo = bootstrap_rmsd(rmsds_cmems_glo)
+    rmsds_error_duacs_swot_l4 = bootstrap_rmsd(rmsds_duacs_swot_l4)
+
     table_all_swot_l3 = pd.DataFrame({'station': sorted_names_mod,
                             'correlation_swot_l3': correlations_swot_l3,
                             'rmsd_swot_l3': rmsds_swot_l3,
@@ -788,10 +808,12 @@ for rad in dmedia:
     #                         # 'nans_percentage': nans_percentage
     #                         })
 
-    table_all_swot_l3
-    table_all_cmems_eur
-    table_all_cmems_glo
-    table_all_duacs_swot_l4
+    # table_all_swot_l3.to_excel(f'{path}tables/table_all_swot_l3_{rad}.xlsx')
+    # table_all_cmems_eur.to_excel(f'{path}tables/table_all_cmems_eur_{rad}.xlsx')
+    # table_all_cmems_glo.to_excel(f'{path}tables/table_all_cmems_glo_{rad}.xlsx')
+    # table_all_duacs_swot_l4.to_excel(f'{path}tables/table_all_duacs_swot_l4_{rad}.xlsx')
+    # # table_all_swot_l3_unsmoothed.to_excel(f'table_all_swot_l3_unsmoothed_{rad}.xlsx')
+
 
     # Average RMSD values taking in account the non-linear behaviour of the RMSD
     # Delete the wrong rows/tgs from rmsds
@@ -803,6 +825,26 @@ for rad in dmedia:
     combined_rmsd_cmems_glo = compute_combined_rmsd(rmsds_cmems_glo, threshold)
     combined_rmsd_duacs_swot_l4 = compute_combined_rmsd(rmsds_duacs_swot_l4, threshold)
     
+    errors_swot_l3.append(rmsds_error_swot_l3)
+    errors_cmems_eur.append(rmsds_error_cmems_eur)
+    errors_cmems_glo.append(rmsds_error_cmems_glo)
+    errors_duacs_swot_l4.append(rmsds_error_duacs_swot_l4)
+
+    mean_rmsd_swot_l3 = np.mean(errors_swot_l3)
+    mean_rmsd_cmems_eur = np.mean(errors_cmems_eur)
+    mean_rmsd_cmems_glo = np.mean(errors_cmems_glo)
+    mean_rmsd_duacs_swot_l4 = np.mean(errors_duacs_swot_l4)
+
+    std_error_swot_l3 = np.std(errors_swot_l3)
+    std_error_cmems_eur = np.std(errors_cmems_eur)
+    std_error_cmems_glo = np.std(errors_cmems_glo)
+    std_error_duacs_swot_l4 = np.std(errors_duacs_swot_l4)
+
+    conf_interval_swot_l3 = np.percentile(errors_swot_l3, [2.5, 97.5])
+    conf_interval_cmems_eur = np.percentile(errors_cmems_eur, [2.5, 97.5])
+    conf_interval_cmems_glo = np.percentile(errors_cmems_glo, [2.5, 97.5])
+    conf_interval_duacs_swot_l4 = np.percentile(errors_duacs_swot_l4, [2.5, 97.5])
+
 
     results_rad_comparison.append({'radius': rad,
                                 'rmsd_swot_l3': combined_rmsd_swot_l3,
@@ -810,6 +852,16 @@ for rad in dmedia:
                                 'rmsd_cmems_glo': combined_rmsd_cmems_glo,
                                 'rmsd_duacs_swot_l4': combined_rmsd_duacs_swot_l4,
                                 # 'rmsd_swot_l3_unsmoothed': np.mean(rmsds_swot_l3_unsmoothed),
+
+                                'rmsd_error_swot_l3': mean_rmsd_swot_l3,
+                                'rmsd_error_cmems_eur': mean_rmsd_cmems_eur,
+                                'rmsd_error_cmems_glo': mean_rmsd_cmems_glo,
+                                'rmsd_error_duacs_swot_l4': mean_rmsd_duacs_swot_l4,
+
+                                'conf_interval_swot_l3': conf_interval_swot_l3,
+                                'conf_interval_cmems_eur': conf_interval_cmems_eur,
+                                'conf_interval_cmems_glo': conf_interval_cmems_glo,
+                                'conf_interval_duacs_swot_l4': conf_interval_duacs_swot_l4,
 
                                 'n_tg_used_swot_l3': len(table_all_swot_l3),
                                 'n_tg_used_cmems_eur': len(table_all_cmems_eur),
@@ -855,20 +907,48 @@ results_df
 # results_df[['radius', 'rmsd_swot_l3', 'rmsd_cmems_eur', 'rmsd_cmems_glo', 'rmsd_duacs_swot_l4',
 #             'correlation_swot_l3', 'correlation_cmems_eur', 'correlation_cmems_glo', 'correlation_duacs_swot_l4' ]]
 
-results_df.to_excel('results_df_5_prod_n_vals.xlsx')
+# results_df.to_excel('results_df_5_prod_n_vals.xlsx')
 
-# plot the results
+# plot the results with errors
 
-plt.plot(results_df['radius'], results_df['rmsd_swot_l3'], label='SWOT L3')
+# Calculate the lower and upper bounds of the confidence intervals
+ci_lower_swot_l3 = [ci[0] for ci in results_df['conf_interval_swot_l3']]
+ci_upper_swot_l3 = [ci[1] for ci in results_df['conf_interval_swot_l3']]
+ci_lower_cmems_eur = [ci[0] for ci in results_df['conf_interval_cmems_eur']]
+ci_upper_cmems_eur = [ci[1] for ci in results_df['conf_interval_cmems_eur']]
+ci_lower_cmems_glo = [ci[0] for ci in results_df['conf_interval_cmems_glo']]
+ci_upper_cmems_glo = [ci[1] for ci in results_df['conf_interval_cmems_glo']]
+ci_lower_duacs_swot_l4 = [ci[0] for ci in results_df['conf_interval_duacs_swot_l4']]
+ci_upper_duacs_swot_l4 = [ci[1] for ci in results_df['conf_interval_duacs_swot_l4']]
+
+# Calculate the error bars as the difference between the RMSD values and the bounds of the confidence intervals
+yerr_lower_swot_l3 = results_df['rmsd_swot_l3'] - np.array(ci_lower_swot_l3)
+yerr_upper_swot_l3 = np.array(ci_upper_swot_l3) - results_df['rmsd_swot_l3']
+yerr_lower_cmems_eur = results_df['rmsd_cmems_eur'] - np.array(ci_lower_cmems_eur)
+yerr_upper_cmems_eur = np.array(ci_upper_cmems_eur) - results_df['rmsd_cmems_eur']
+yerr_lower_cmems_glo = results_df['rmsd_cmems_glo'] - np.array(ci_lower_cmems_glo)
+yerr_upper_cmems_glo = np.array(ci_upper_cmems_glo) - results_df['rmsd_cmems_glo']
+yerr_lower_duacs_swot_l4 = results_df['rmsd_duacs_swot_l4'] - np.array(ci_lower_duacs_swot_l4)
+yerr_upper_duacs_swot_l4 = np.array(ci_upper_duacs_swot_l4) - results_df['rmsd_duacs_swot_l4']
+
+
+# Combine lower and upper errors into a list of pairs
+yerr_swot_l3 = [yerr_lower_swot_l3, yerr_upper_swot_l3]
+yerr_cmems_eur = [yerr_lower_cmems_eur, yerr_upper_cmems_eur]
+yerr_cmems_glo = [yerr_lower_cmems_glo, yerr_upper_cmems_glo]
+yerr_duacs_swot_l4 = [yerr_lower_duacs_swot_l4, yerr_upper_duacs_swot_l4]
+
+
+plt.errorbar(results_df['radius'], results_df['rmsd_swot_l3'], yerr=yerr_swot_l3, fmt='-o', capsize=5,label='SWOT L3')
 plt.scatter(results_df['radius'], results_df['rmsd_swot_l3'])
 
-plt.plot(results_df['radius'], results_df['rmsd_cmems_eur'], label='CMEMS NRT EUR')
+plt.errorbar(results_df['radius'], results_df['rmsd_cmems_eur'], yerr=yerr_cmems_eur, fmt='-o', capsize=5,label='CMEMS NRT EUR')
 plt.scatter(results_df['radius'], results_df['rmsd_cmems_eur'])
 
-plt.plot(results_df['radius'], results_df['rmsd_cmems_glo'], label='CMEMS NRT GLO')
+plt.errorbar(results_df['radius'], results_df['rmsd_cmems_glo'], yerr=yerr_cmems_glo, fmt='-o', capsize=5,label='CMEMS NRT GLO')
 plt.scatter(results_df['radius'], results_df['rmsd_cmems_glo'])
 
-plt.plot(results_df['radius'], results_df['rmsd_duacs_swot_l4'], label='DUACS SWOT L4')
+plt.errorbar(results_df['radius'], results_df['rmsd_duacs_swot_l4'], yerr=yerr_duacs_swot_l4, fmt='-o', capsize=5,label='DUACS SWOT L4')
 plt.scatter(results_df['radius'], results_df['rmsd_duacs_swot_l4'])
 
 # plt.plot(results_df['radius'], results_df['rmsd_swot_l3_unsmoothed'], label='SWOT L3 unsmoothed')
@@ -880,5 +960,30 @@ plt.title('RMSD vs Radius')
 plt.legend()
 plt.grid(alpha=0.2)
 plt.show()
+
+# plt.savefig('rmsd_vs_radius_5_prod.png')
+
+
+# plt.plot(results_df['radius'], results_df['rmsd_swot_l3'], label='SWOT L3')
+# plt.scatter(results_df['radius'], results_df['rmsd_swot_l3'])
+
+# plt.plot(results_df['radius'], results_df['rmsd_cmems_eur'], label='CMEMS NRT EUR')
+# plt.scatter(results_df['radius'], results_df['rmsd_cmems_eur'])
+
+# plt.plot(results_df['radius'], results_df['rmsd_cmems_glo'], label='CMEMS NRT GLO')
+# plt.scatter(results_df['radius'], results_df['rmsd_cmems_glo'])
+
+# plt.plot(results_df['radius'], results_df['rmsd_duacs_swot_l4'], label='DUACS SWOT L4')
+# plt.scatter(results_df['radius'], results_df['rmsd_duacs_swot_l4'])
+
+# # plt.plot(results_df['radius'], results_df['rmsd_swot_l3_unsmoothed'], label='SWOT L3 unsmoothed')
+# # plt.scatter(results_df['radius'], results_df['rmsd_swot_l3_unsmoothed'])
+
+# plt.xlabel('Radius (km)')
+# plt.ylabel('RMSD (cm)')
+# plt.title('RMSD vs Radius')
+# plt.legend()
+# plt.grid(alpha=0.2)
+# plt.show()
 
 # plt.savefig('rmsd_vs_radius_5_prod.png')
