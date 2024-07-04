@@ -19,7 +19,7 @@ import math
 strategy = 0
 
 # Maximum distance from each CMEMS point to the tide gauge location
-dmedia = np.arange(20, 25, 5)  # Array of distances from 5 to 110 km in 5 km increments
+dmedia = np.arange(20, 65, 5)  # Array of distances from 5 to 110 km in 5 km increments
 
 # Window size for the LOESS filter (in days)
 day_window = 7
@@ -810,7 +810,7 @@ for rad in dmedia:
     # PLOT HISTOGRAMS OF VARIANCES PER STATION TO CHECK THE DISTRIBUTION
     # change rmsd names for joining dataframes
     table_all_tg = table_all_swot_l3[['station', 'var_TG']]
-    
+
     table_all_tg = table_all_duacs_swot_l4.rename(columns={'var_TG': 'var'})  # Use the same name for the TG variances
     table_all_swot_l3 = table_all_swot_l3.rename(columns={'var_swot_l3': 'var'})
     table_all_cmems_eur = table_all_cmems_eur.rename(columns={'var_cmems_eur': 'var'})
@@ -839,19 +839,19 @@ for rad in dmedia:
     fig, ax = plt.subplots()
 
     ax.bar(x - 1.5 * bar_width, pivot_df['table_all_swot_l3'], width=bar_width, label='SWOT L3')
-    ax.bar(x - 0.5 * bar_width, pivot_df['table_all_cmems_eur'], width=bar_width, label='NRT_EUR')
+    ax.bar(x - 0.5 * bar_width, pivot_df['table_all_duacs_swot_l4'], width=bar_width, label='DUACS_SWOT_L4')    
     ax.bar(x + 0.5 * bar_width, pivot_df['table_all_cmems_glo'], width=bar_width, label='NRT_GLO')
-    ax.bar(x + 1.5 * bar_width, pivot_df['table_all_duacs_swot_l4'], width=bar_width, label='DUACS_SWOT_L4')
+    ax.bar(x + 1.5 * bar_width, pivot_df['table_all_cmems_eur'], width=bar_width, label='NRT_EUR')
     # ax.bar(x + 1.5 * bar_width, pivot_df['tg'], width=bar_width, label='TG')
     
     # Add labels and title
     ax.set_xlabel('Tide Gauges')
-    ax.set_ylabel('RMSD')
-    ax.set_title('RMSD per station and altimetry product')
+    ax.set_ylabel('Variance (m²)')
+    ax.set_title(f'Variance of altimetry products at {rad} km radius')
     ax.set_xticks(x)
-    ax.set_xticklabels(stations, rotation=90)
-    ax.legend()
-    ax.grid(True, which='both', axis='both', color='gray', linestyle='--', linewidth=0.5)
+    ax.set_xticklabels(stations, rotation=90, fontsize='small')
+    ax.legend(fontsize='small')
+    ax.grid(True, which='both', axis='both', color='gray', linestyle='--', linewidth=0.5, alpha=0.5)
 
     plt.show()
 
@@ -1009,7 +1009,7 @@ plt.scatter(results_df['radius'], results_df['rmsd_duacs_swot_l4'])
 plt.xlabel('Radius (km)')
 plt.ylabel('RMSD (cm)')
 plt.title('RMSD vs Radius')
-plt.legend()
+plt.legend(fontsize=6)
 plt.grid(alpha=0.2)
 plt.show()
 # plt.savefig('rmsd_vs_radius_4_prod_100km_errorbar.png')
@@ -1036,7 +1036,7 @@ plt.show()
 # plt.xlabel('Radius (km)')
 # plt.ylabel('RMSD (cm)')
 # plt.title('RMSD vs Radius')
-# plt.legend()
+# plt.legend(fontsize='small')
 # plt.grid(alpha=0.2)
 # plt.show()
 
