@@ -4,7 +4,6 @@ import xarray as xr
 import pandas as pd
 import os
 import cartopy.crs as ccrs
-from shapely.geometry import LineString
 import warnings
 import cartopy.feature as cfeature
 import statsmodels.api as sm  # for LOWESS filter
@@ -20,7 +19,7 @@ import math
 strategy = 0
 
 # Maximum distance from each CMEMS point to the tide gauge location
-dmedia = np.arange(20, 100, 5)  # Array of distances from 5 to 110 km in 5 km increments
+dmedia = np.arange(20, 25, 5)  # Array of distances from 5 to 110 km in 5 km increments
 
 # Window size for the LOESS filter (in days)
 day_window = 7
@@ -540,8 +539,6 @@ for rad in dmedia:
     rmsds_duacs_swot_l4 = []
     rmsds_swot_l3_unsmoothed = []
 
-
-
     variances_tg = []
     variances_swot_l3 = []
     variances_cmems_eur = []
@@ -729,16 +726,12 @@ for rad in dmedia:
     ordered_lon_mod = [x for i, x in enumerate(ordered_lon) if i not in empty_stations] 
     # n_val = [x for i, x in enumerate(n_val) if i not in empty_stations]
 
-    # apply bootstrap method to calculate the confidence interval
-    rmsds_error_swot_l3 = bootstrap_rmsd(rmsds_swot_l3)
-    rmsds_error_cmems_eur = bootstrap_rmsd(rmsds_cmems_eur)
-    rmsds_error_cmems_glo = bootstrap_rmsd(rmsds_cmems_glo)
-    rmsds_error_duacs_swot_l4 = bootstrap_rmsd(rmsds_duacs_swot_l4)
+
 
     table_all_swot_l3 = pd.DataFrame({'station': sorted_names_mod,
                             'correlation_swot_l3': correlations_swot_l3,
                             'rmsd_swot_l3': rmsds_swot_l3,
-                            # 'var_TG': variances_tg,
+                            'var_TG': variances_tg,
                             'var_swot_l3': variances_swot_l3,
                             'var_diff_swot_l3': variances_diff_swot_l3,
                             'num_points_swot_l3': n_val_swot_l3,
@@ -753,7 +746,7 @@ for rad in dmedia:
     table_all_cmems_eur = pd.DataFrame({'station': sorted_names_mod,
                             'correlation_cmems_eur': correlations_cmems_eur,
                             'rmsd_cmems_eur': rmsds_cmems_eur,
-                            # 'var_TG': variances_tg,
+                            'var_TG': variances_tg,
                             'var_cmems_eur': variances_cmems_eur,
                             'var_diff_cmems_eur': variances_diff_cmems_eur,
                             'num_points_cmems_eur': n_val_cmems_eur,
@@ -768,7 +761,7 @@ for rad in dmedia:
     table_all_cmems_glo = pd.DataFrame({'station': sorted_names_mod,
                             'correlation_cmems_glo': correlations_cmems_glo,
                             'rmsd_cmems_glo': rmsds_cmems_glo,
-                            # 'var_TG': variances_tg,
+                            'var_TG': variances_tg,
                             'var_cmems_glo': variances_cmems_glo,
                             'var_diff_cmems_glo': variances_diff_cmems_glo,
                             'num_points_cmems_glo': n_val_cmems_glo,
@@ -783,7 +776,7 @@ for rad in dmedia:
     table_all_duacs_swot_l4 = pd.DataFrame({'station': sorted_names_mod,
                             'correlation_duacs_swot_l4': correlations_duacs_swot_l4,
                             'rmsd_duacs_swot_l4': rmsds_duacs_swot_l4,
-                            # 'var_TG': variances_tg,
+                            'var_TG': variances_tg,
                             'var_CMEMS_duacs_swot_l4': variances_duacs_swot_l4,
                             'var_diff_duacs_swot_l4': variances_diff_duacs_swot_l4,
                             'num_points_duacs_swot_l4': n_val_duacs_swot_l4,
@@ -813,11 +806,60 @@ for rad in dmedia:
     # table_all_cmems_glo.to_excel(f'{path}tables/table_all_cmems_glo_{rad}.xlsx')
     # table_all_duacs_swot_l4.to_excel(f'{path}tables/table_all_duacs_swot_l4_{rad}.xlsx')
     # # table_all_swot_l3_unsmoothed.to_excel(f'table_all_swot_l3_unsmoothed_{rad}.xlsx')
+    
+    # PLOT HISTOGRAMS OF VARIANCES PER STATION TO CHECK THE DISTRIBUTION
+    # change rmsd names for joining dataframes
+    table_all_tg = table_all_swot_l3[['station', 'var_TG']]
+    
+    table_all_tg = table_all_duacs_swot_l4.rename(columns={'var_TG': 'var'})  # Use the same name for the TG variances
+    table_all_swot_l3 = table_all_swot_l3.rename(columns={'var_swot_l3': 'var'})
+    table_all_cmems_eur = table_all_cmems_eur.rename(columns={'var_cmems_eur': 'var'})
+    table_all_cmems_glo = table_all_cmems_glo.rename(columns={'var_cmems_glo': 'var'})
+    table_all_duacs_swot_l4 = table_all_duacs_swot_l4.rename(columns={'var_CMEMS_duacs_swot_l4': 'var'})
+    
+    table_all_tg['source'] = 'tg'
+    table_all_swot_l3['source'] = 'table_all_swot_l3'
+    table_all_cmems_eur['source'] = 'table_all_cmems_eur'
+    table_all_cmems_glo['source'] = 'table_all_cmems_glo'
+    table_all_duacs_swot_l4['source'] = 'table_all_duacs_swot_l4'
+    # table_all_swot_l3_unsmoothed['source'] = 'table_all_swot_l3_unsmoothed'
 
+    combined_df = pd.concat([table_all_tg, table_all_swot_l3, table_all_cmems_eur, table_all_cmems_glo, table_all_duacs_swot_l4])
+    
+    # Pivot the combined dataframe to have sources as columns
+    pivot_df = combined_df.pivot(index='station', columns='source', values='var')
+    pivot_df = pivot_df.reset_index()
+    
+    # Define the positions for the bars
+    stations = pivot_df['station']
+    bar_width = 0.2
+    x = np.arange(len(stations))
+
+    # Plotting
+    fig, ax = plt.subplots()
+
+    ax.bar(x - 1.5 * bar_width, pivot_df['table_all_swot_l3'], width=bar_width, label='SWOT L3')
+    ax.bar(x - 0.5 * bar_width, pivot_df['table_all_cmems_eur'], width=bar_width, label='NRT_EUR')
+    ax.bar(x + 0.5 * bar_width, pivot_df['table_all_cmems_glo'], width=bar_width, label='NRT_GLO')
+    ax.bar(x + 1.5 * bar_width, pivot_df['table_all_duacs_swot_l4'], width=bar_width, label='DUACS_SWOT_L4')
+    # ax.bar(x + 1.5 * bar_width, pivot_df['tg'], width=bar_width, label='TG')
+    
+    # Add labels and title
+    ax.set_xlabel('Tide Gauges')
+    ax.set_ylabel('RMSD')
+    ax.set_title('RMSD per station and altimetry product')
+    ax.set_xticks(x)
+    ax.set_xticklabels(stations, rotation=90)
+    ax.legend()
+    ax.grid(True, which='both', axis='both', color='gray', linestyle='--', linewidth=0.5)
+
+    plt.show()
+
+
+    # plt.savefig(f'{path}histograms/variances_{rad}.png')
 
     # Average RMSD values taking in account the non-linear behaviour of the RMSD
     # Delete the wrong rows/tgs from rmsds
-
     threshold = 10  # RMSD > 5 out
 
     combined_rmsd_swot_l3 = compute_combined_rmsd(rmsds_swot_l3, threshold)
@@ -825,6 +867,12 @@ for rad in dmedia:
     combined_rmsd_cmems_glo = compute_combined_rmsd(rmsds_cmems_glo, threshold)
     combined_rmsd_duacs_swot_l4 = compute_combined_rmsd(rmsds_duacs_swot_l4, threshold)
     
+    # Apply bootstrap method to calculate the confidence interval of RMSD
+    rmsds_error_swot_l3 = bootstrap_rmsd(rmsds_swot_l3)
+    rmsds_error_cmems_eur = bootstrap_rmsd(rmsds_cmems_eur)
+    rmsds_error_cmems_glo = bootstrap_rmsd(rmsds_cmems_glo)
+    rmsds_error_duacs_swot_l4 = bootstrap_rmsd(rmsds_duacs_swot_l4)
+
     errors_swot_l3.append(rmsds_error_swot_l3)
     errors_cmems_eur.append(rmsds_error_cmems_eur)
     errors_cmems_glo.append(rmsds_error_cmems_glo)
@@ -847,6 +895,8 @@ for rad in dmedia:
 
 
     results_rad_comparison.append({'radius': rad,
+                                'variances_tg': variances_tg,  
+                                
                                 'rmsd_swot_l3': combined_rmsd_swot_l3,
                                 'rmsd_cmems_eur': combined_rmsd_cmems_eur,
                                 'rmsd_cmems_glo': combined_rmsd_cmems_glo,
@@ -857,6 +907,11 @@ for rad in dmedia:
                                 'rmsd_error_cmems_eur': mean_rmsd_cmems_eur,
                                 'rmsd_error_cmems_glo': mean_rmsd_cmems_glo,
                                 'rmsd_error_duacs_swot_l4': mean_rmsd_duacs_swot_l4,
+
+                                'std_error_swot_l3': std_error_swot_l3,
+                                'std_error_cmems_eur': std_error_cmems_eur,
+                                'std_error_cmems_glo': std_error_cmems_glo,
+                                'std_error_duacs_swot_l4': std_error_duacs_swot_l4,
 
                                 'conf_interval_swot_l3': conf_interval_swot_l3,
                                 'conf_interval_cmems_eur': conf_interval_cmems_eur,
@@ -951,15 +1006,14 @@ plt.scatter(results_df['radius'], results_df['rmsd_cmems_glo'])
 plt.errorbar(results_df['radius'], results_df['rmsd_duacs_swot_l4'], yerr=yerr_duacs_swot_l4, fmt='-o', capsize=5,label='DUACS SWOT L4')
 plt.scatter(results_df['radius'], results_df['rmsd_duacs_swot_l4'])
 
-# plt.plot(results_df['radius'], results_df['rmsd_swot_l3_unsmoothed'], label='SWOT L3 unsmoothed')
-# plt.scatter(results_df['radius'], results_df['rmsd_swot_l3_unsmoothed'])
-
 plt.xlabel('Radius (km)')
 plt.ylabel('RMSD (cm)')
 plt.title('RMSD vs Radius')
 plt.legend()
 plt.grid(alpha=0.2)
 plt.show()
+# plt.savefig('rmsd_vs_radius_4_prod_100km_errorbar.png')
+
 
 # plt.savefig('rmsd_vs_radius_5_prod.png')
 
