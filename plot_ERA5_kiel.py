@@ -4,111 +4,85 @@ import cartopy.crs as ccrs
 import cartopy.feature as cfeature
 import pandas as pd
 import xarray as xr
+import matplotlib.colors as mcolors
+
+# Define the RGB values for your custom color palette
+colors_rgb = [
+    (255, 255, 255), (214, 226, 255), (181, 201, 255), (142, 178, 255),
+    (127, 150, 255), (99, 112, 247), (0, 99, 255), (0, 102, 102), 
+    (0, 150, 150), (0, 198, 51), (99, 255, 0), (150, 255, 0), 
+    (198, 255, 51), (255, 255, 0), (255, 198, 0), (255, 160, 0), 
+    (255, 124, 0), (255, 102, 0), (255, 25, 0)
+]
+
+# Convert RGB tuples to normalized RGB values (values between 0 and 1)
+colors_normalized = [(r / 255., g / 255., b / 255.) for (r, g, b) in colors_rgb]
+
+# Create a colormap using the normalized RGB values
+cmap = mcolors.ListedColormap(colors_normalized)
 
 # Load data
 path = '/home/dvega/anaconda3/work/SWOT_STORM/ERA5/'
-ds = xr.open_dataset(f'{path}msl_pressure_global_01-02042023.nc')
-# ds = xr.open_dataset(f'{path}wind_mean_sea_level_pres_kiel.nc')
-ds = xr.open_dataset(f'{path}msl_wind_kiel_v6.nc')
-ds = xr.open_dataset(f'{path}msl_wind_alte_v1.nc')
-ds = xr.open_dataset(f'{path}msl_wind_Beryl_v1.nc')
+files = ['msl_wind_kiel_v6.nc', 'msl_wind_alte_v1.nc', 'msl_wind_Beryl_v1.nc', 'msl_wind_Beryl_v3.nc']
+time_swot_list = ['2023-04-02 00:00:00', '2023-10-14 17:00:00', '2024-07-05 07:00:00', '2024-07-05 07:00:00']
 
-# Select specific date
-time_swot = '2023-04-02 00:00:00'
-time_swot = '2023-10-14 17:00:00'
-time_swot = '2024-07-05 07:00:00'
+# Define discrete levels for the wind speed colorbar
+wind_speed_levels = np.arange(-0.5, 21.5, 1)  # Adjusted to include up to 20.5 m/s
 
-u10 = ds['u10'].sel(time=time_swot)
-v10 = ds['v10'].sel(time=time_swot)
-msl = ds['msl'].sel(time=time_swot)
+for file, time_swot in zip(files, time_swot_list):
+    ds = xr.open_dataset(f'{path}{file}')
 
-# Calculate wind speed and direction
-wind_speed = np.sqrt(u10**2 + v10**2)
+    u10 = ds['u10'].sel(time=time_swot)
+    v10 = ds['v10'].sel(time=time_swot)
+    msl = ds['msl'].sel(time=time_swot)
 
-# Normalize msl to hPa
-msl_hpa = msl / 100.0
+    # Calculate wind speed
+    wind_speed = np.sqrt(u10**2 + v10**2)
 
-# lolabox = [-10, 20, 10, 70]
+    # Normalize msl to hPa
+    msl_hpa = msl / 100.0
 
-# Define the plot
-fig = plt.figure(figsize=(10, 5))
-ax = plt.axes(projection=ccrs.PlateCarree())
+    # Define the plot
+    fig = plt.figure(figsize=(10, 5))
+    ax = plt.axes(projection=ccrs.PlateCarree())
 
-# Define custom levels for contours
-min_value = np.floor(msl_hpa.min().item())
-max_value = np.ceil(msl_hpa.max().item())
-levels = np.arange(min_value, max_value + 5, 5)
+    # Define custom levels for contours
+    min_value = np.floor(msl_hpa.min().item())
+    max_value = np.ceil(msl_hpa.max().item())
+    levels = np.arange(min_value, max_value + 5, 5)
 
-# ax.set_extent(lolabox, crs=ccrs.PlateCarree())
-# Plot mean sea level pressure as contours with thicker grey lines
-msl_contour = ax.contour(msl.longitude, msl.latitude, msl_hpa, levels=levels, colors='#4d4d4d', linewidths=1.5, transform=ccrs.PlateCarree())
-plt.clabel(msl_contour, inline=True, fontsize=8, fmt='%1.0f')
+    # Plot mean sea level pressure as contours with thicker grey lines
+    msl_contour = ax.contour(msl.longitude, msl.latitude, msl_hpa, levels=levels, colors='#4d4d4d', linewidths=1, transform=ccrs.PlateCarree())
+    plt.clabel(msl_contour, inline=True, fontsize=8, fmt='%1.0f')
 
-# # Add colorbar for wind speed
-wind_speed_plot = ax.contourf(u10.longitude, u10.latitude, wind_speed, levels=1000, cmap='coolwarm', transform=ccrs.PlateCarree())
-cbar = plt.colorbar(wind_speed_plot, orientation='vertical', pad=0.02, aspect=30)
-cbar.set_label('Wind Speed (m/s)')
+    # Set the colorbar range from 0 to 21 m/s for wind speed
+    vmin, vmax = 0, 20
 
-stride = 15  # Adjust this value to reduce the number of arrows
-u10_reduced = u10[::stride, ::stride]
-v10_reduced = v10[::stride, ::stride]
-lon_reduced = u10.longitude[::stride]
-lat_reduced = u10.latitude[::stride]
+    # Add colorbar for wind speed with discrete levels using the custom colormap
+    wind_speed_plot = ax.contourf(u10.longitude, u10.latitude, wind_speed, levels=wind_speed_levels, cmap=cmap, transform=ccrs.PlateCarree(), vmin=vmin, vmax=vmax)
+    cbar = plt.colorbar(wind_speed_plot, orientation='vertical', pad=0.02, aspect=30, ticks=range(0, 21, 1))
+    cbar.set_label('Wind Speed (m/s)', labelpad=10)
 
-# Plot wind vectors with larger arrows
-plt.quiver(lon_reduced, lat_reduced, u10_reduced, v10_reduced, scale=300, width=0.005, transform=ccrs.PlateCarree())
+    stride = 15  # Adjust this value to reduce the number of arrows
+    u10_reduced = u10[::stride, ::stride]
+    v10_reduced = v10[::stride, ::stride]
+    lon_reduced = u10.longitude[::stride]
+    lat_reduced = u10.latitude[::stride]
 
+    # Plot wind vectors with larger arrows
+    plt.quiver(lon_reduced, lat_reduced, u10_reduced, v10_reduced, scale=250, width=0.005, transform=ccrs.PlateCarree())
 
-# Add features
-ax.add_feature(cfeature.LAND, zorder=0)
-ax.add_feature(cfeature.COASTLINE, zorder=1)
-gl = ax.gridlines(draw_labels=True, alpha=0.5)
-gl.top_labels = False
-gl.right_labels = False
+    # Add features
+    ax.add_feature(cfeature.LAND, zorder=0)
+    ax.add_feature(cfeature.COASTLINE, zorder=1)
+    gl = ax.gridlines(draw_labels=True, alpha=0.5)
+    gl.top_labels = False
+    gl.right_labels = False
 
-# Add title and labels
-plt.title(f'{time_swot} ')
-plt.xlabel('Longitude')
-plt.ylabel('Latitude')
+    # Add title and labels
+    plt.title(f'{time_swot}')
+    plt.xlabel('Longitude')
+    plt.ylabel('Latitude')
 
-# Show the plot
-plt.show()
-
-
-
-fig = plt.figure(figsize=(10, 5))
-ax = plt.axes(projection=ccrs.PlateCarree())
-
-
-sp= sp/100
-
-vmin = 1010
-vmax = sp.max()
-
-levels = np.linspace(vmin, vmax, 21)
-
-sp_contour = ax.contourf(sp.longitude, sp.latitude, sp, levels=levels, cmap='coolwarm', transform=ccrs.PlateCarree(),  vmin=vmin, vmax=vmax)
-
-# Add colorbar for msl contours
-cbar = plt.colorbar(sp_contour, orientation='vertical', pad=0.02, aspect=30)
-cbar.set_label('Surface Pressure (hPa)')
-
-# Plot wind vectors
-plt.quiver(u10.longitude, u10.latitude, 
-           u10, v10, 
-           scale=200, transform=ccrs.PlateCarree())
-
-# Add features
-ax.add_feature(cfeature.LAND, zorder=2)
-ax.add_feature(cfeature.COASTLINE, zorder=3)
-ax.gridlines(draw_labels=True, alpha=0.5)
-
-
-# Add title and labels
-plt.title('ERA5 Wind/MSLP')
-plt.xlabel('Longitude')
-plt.ylabel('Latitude')
-
-
-# Show the plot
-plt.show()
+    # Show the plot
+    plt.show()
