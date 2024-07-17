@@ -11,10 +11,12 @@ ds = xr.open_dataset(f'{path}msl_pressure_global_01-02042023.nc')
 # ds = xr.open_dataset(f'{path}wind_mean_sea_level_pres_kiel.nc')
 ds = xr.open_dataset(f'{path}msl_wind_kiel_v6.nc')
 ds = xr.open_dataset(f'{path}msl_wind_alte_v1.nc')
+ds = xr.open_dataset(f'{path}msl_wind_Beryl_v1.nc')
 
 # Select specific date
 time_swot = '2023-04-02 00:00:00'
 time_swot = '2023-10-14 17:00:00'
+time_swot = '2024-07-05 07:00:00'
 
 u10 = ds['u10'].sel(time=time_swot)
 v10 = ds['v10'].sel(time=time_swot)
@@ -68,6 +70,45 @@ gl.right_labels = False
 plt.title(f'{time_swot} ')
 plt.xlabel('Longitude')
 plt.ylabel('Latitude')
+
+# Show the plot
+plt.show()
+
+
+
+fig = plt.figure(figsize=(10, 5))
+ax = plt.axes(projection=ccrs.PlateCarree())
+
+
+sp= sp/100
+
+vmin = 1010
+vmax = sp.max()
+
+levels = np.linspace(vmin, vmax, 21)
+
+sp_contour = ax.contourf(sp.longitude, sp.latitude, sp, levels=levels, cmap='coolwarm', transform=ccrs.PlateCarree(),  vmin=vmin, vmax=vmax)
+
+# Add colorbar for msl contours
+cbar = plt.colorbar(sp_contour, orientation='vertical', pad=0.02, aspect=30)
+cbar.set_label('Surface Pressure (hPa)')
+
+# Plot wind vectors
+plt.quiver(u10.longitude, u10.latitude, 
+           u10, v10, 
+           scale=200, transform=ccrs.PlateCarree())
+
+# Add features
+ax.add_feature(cfeature.LAND, zorder=2)
+ax.add_feature(cfeature.COASTLINE, zorder=3)
+ax.gridlines(draw_labels=True, alpha=0.5)
+
+
+# Add title and labels
+plt.title('ERA5 Wind/MSLP')
+plt.xlabel('Longitude')
+plt.ylabel('Latitude')
+
 
 # Show the plot
 plt.show()
