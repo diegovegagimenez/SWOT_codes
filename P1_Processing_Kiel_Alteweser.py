@@ -2,16 +2,14 @@ import xarray as xr
 import pandas as pd
 import numpy as np
 import os
-from tqdm import tqdm
 import matplotlib.pyplot as plt
 from utide import solve, reconstruct
 import xarray.plot as xplt  # Import xarray.plot module
 import mat73
-from mpl_toolkits.mplot3d import Axes3D
 from matplotlib.tri import Triangulation
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature
-
+import matplotlib.colors as mcolors
 
 def read_first_available(dataset, var_names):
     """
@@ -44,6 +42,22 @@ def haversine(lon1, lat1, lon2, lat2):
     c = 2 * np.arcsin(np.sqrt(a))
     r = 6371  # Radius of earth in kilometers
     return c * r
+
+# Define the RGB values for your custom color palette
+colors_rgb = [
+    (255, 255, 255), (214, 226, 255), (181, 201, 255), (142, 178, 255),
+    (127, 150, 255), (99, 112, 247), (0, 99, 255), (0, 102, 102), 
+    (0, 150, 150), (0, 198, 51), (99, 255, 0), (150, 255, 0), 
+    (198, 255, 51), (255, 255, 0), (255, 198, 0), (255, 160, 0), 
+    (255, 124, 0), (255, 102, 0), (255, 25, 0)
+]
+
+# Convert RGB tuples to normalized RGB values (values between 0 and 1)
+colors_normalized = [(r / 255., g / 255., b / 255.) for (r, g, b) in colors_rgb]
+
+# Create a colormap using the normalized RGB values
+cmap = mcolors.ListedColormap(colors_normalized)
+
 
 TG_path='/home/amores/SWOT/A_data/A_TGs/'
 SWOT_path = '/home/dvega/anaconda3/work/SWOT_STORM/'
@@ -117,11 +131,14 @@ coef_a = solve(df_tg_a.index, df_tg_a['SLEV_demean'],
 tide_k = reconstruct(df_tg_k.index, coef_k, verbose=False)
 tide_a = reconstruct(df_tg_a.index, coef_a, verbose=False)
 
+df_tg_k['detided'] = df_tg_k['SLEV_demean']-tide_k.h
+df_tg_a['detided'] = df_tg_a['SLEV_demean']-tide_a.h
+
 
 # plt.rc('text', usetex=True)
 # plt.rc('font', family='serif')
 
-# plt.plot(df_tg_k.index[-70000:], (df_tg_k['SLEV_demean']-tide_k.h)[-70000:]*100, zorder=0, c='black', linewidth=0.8, label=r'Sea level')
+# plt.plot(df_tg_k.index[-70000:], (df_tg_k['Detided'][-70000:]*100, zorder=0, c='black', linewidth=0.8, label=r'Sea level')
 # plt.scatter(df_kiel['time'], df_kiel['ssha_demean'], c='r', zorder = 1, s=8, label=r'SWOT Data')
 # plt.xticks(rotation=45)
 # plt.xlabel(r'Time (days)', labelpad=15)
@@ -152,21 +169,21 @@ df_kiel['ssha_demean'] = df_kiel['ssha_dac']-df_kiel['ssha_dac'].mean()
 df_alte = df[df['latitude'] == latTGs[1][0]]
 df_alte['ssha_demean'] = df_alte['ssha_dac']-df_alte['ssha_dac'].mean()
 
+# Convert time to datetime
+df_kiel['time'] = pd.to_datetime(df_kiel['time'])
+df_alte['time'] = pd.to_datetime(df_alte['time'])
 
 
 # ---------------------- ERA5 REANALYSIS MODEL -------------------------------------
 
 ds_era5 = xr.open_dataset(f'{era5_path}wind_mean_sea_level_pres_kiel.nc')
 
-msl = ds_era5['msl']
-u10 = ds_era5['u10']
-v10 = ds_era5['v10']
-
-# Select speciphic date
 time_swot = '2023-04-02 00:00:00' 
-u10 = u10.sel(time = time_swot)
-v10 = v10.sel(time = time_swot)
-msl = msl.sel(time = time_swot)
+
+msl = ds_era5['msl'].sel(time = time_swot)
+u10 = ds_era5['u10'].sel(time = time_swot)
+v10 = ds_era5['v10'].sel(time = time_swot)
+
 
 # Calculate wind speed and direction (optional)
 wind_speed = np.sqrt(u10**2 + v10**2)
@@ -243,7 +260,8 @@ coef_a_SC = solve(ts_alte_SC['time'], ts_alte_SC['elevation'],
 tide_k_SC = reconstruct(ts_kiel_SC['time'], coef_k_SC, verbose=False)
 tide_a_SC = reconstruct(ts_alte_SC['time'], coef_a_SC, verbose=False)
 
-
+ts_kiel_SC['detided'] = ts_kiel_SC['elevation'] - tide_k_SC.h
+ts_alte_SC['detided'] = ts_alte_SC['elevation'] - tide_a_SC.h
 
 # --------------------- READ SWOT PASS ------------------------------------------------
 
@@ -256,26 +274,57 @@ ssha_dac_alte = ds_swot_alte.ssha+ds_swot_alte.dac
 
 # ------------------- CREATE FIGURE FOR ALL KIEL DATA -----------------------------------
 
+# Set same period for all TSs
+# Margin of 1 week
+time_margin = pd.Timedelta(days=7)  # Example margin of 1 day
+
+# Calculate initial and final times for Kiel
+initial_time_kiel = np.max([np.min(df_tg_k.index), np.min(ts_kiel_SC['time']), np.min(df_kiel['time'])]) - time_margin
+final_time_kiel = np.min([np.max(df_tg_k.index), np.max(ts_kiel_SC['time']), np.max(df_kiel['time'])]) + time_margin
+
+# Calculate initial and final times for Alte
+initial_time_alte = np.max([np.min(df_tg_a.index), np.min(ts_alte_SC['time']), np.min(df_alte['time'])]) - time_margin
+final_time_alte = np.min([np.max(df_tg_a.index), np.max(ts_alte_SC['time']), np.max(df_alte['time'])]) + time_margin
+
+# Set the same period for all time series with the margin
+df_tg_k = df_tg_k[(df_tg_k.index >= initial_time_kiel) & (df_tg_k.index <= final_time_kiel)]
+df_tg_a = df_tg_a[(df_tg_a.index >= initial_time_alte) & (df_tg_a.index <= final_time_alte)]
+
+ts_kiel_SC = ts_kiel_SC[(ts_kiel_SC['time'] >= initial_time_kiel) & (ts_kiel_SC['time'] <= final_time_kiel)]
+ts_alte_SC = ts_alte_SC[(ts_alte_SC['time'] >= initial_time_alte) & (ts_alte_SC['time'] <= final_time_alte)]
+
+df_kiel = df_kiel[(df_kiel['time'] >= initial_time_kiel) & (df_kiel['time'] <= final_time_kiel)]
+df_alte = df_alte[(df_alte['time'] >= initial_time_alte) & (df_alte['time'] <= final_time_alte)]
+
+# SELECT TARGET DATE POINTS OF SWOT
+
+df_kiel_max = df_kiel.sort_values(by='ssha_demean', ascending=False)[:5]
+df_alte_max = df_alte.sort_values(by='ssha_demean', ascending=False)[:3]
+df_alte_min = df_alte.sort_values(by='ssha_demean', ascending=True)[:2]
+
 lolabox = [9.5, 12.5, 53.5, 58]
 fig = plt.figure(figsize=(18, 6))
-gs = plt.GridSpec(1, 4, width_ratios=[1, 1, 1, 1.5])
+gs = plt.GridSpec(1, 4, width_ratios=[1, 1, 1, 1])
 
 # Time series plot ----------------------------------------
 ax0 = fig.add_subplot(gs[0, 0])
-ax0.plot(df_tg_k.index[-70000:], (df_tg_k['SLEV_demean']-tide_k.h)[-70000:]*100, zorder=0, c='black', linewidth=0.8, label=r'Sea level')  # TG time series
-ax0.plot(ts_kiel_SC['time'], (ts_kiel_SC['elevation']-tide_k_SC.h)*100, zorder=1, c='blue', linewidth=0.6, label=r'Sea level SCHISM')  # TG time series
+ax0.plot(df_tg_k.index, df_tg_k['detided']*100, zorder=0, c='black', linewidth=0.8, label=r'Tide Gauge')  # TG time series
+ax0.plot(ts_kiel_SC['time'], ts_kiel_SC['detided']*100, zorder=1, c='blue', linewidth=0.6, label=r'SCHISM model')  # TG time series
 ax0.scatter(df_kiel['time'], df_kiel['ssha_demean'], c='r', zorder=2, s=8, label=r'SWOT Data')
+ax0.scatter(df_kiel_max['time'], df_kiel_max['ssha_demean'], c='green', zorder=3, s=50, label=r'Extremes SWOT Data')
+
 ax0.set_xlabel('Time (days)', labelpad=15)
 ax0.set_ylabel('Sea level anomaly (cm)')
 ax0.grid(True, alpha=0.3)
 ax0.legend(fontsize=7)
+ax0.set_title('Kiel TG')
 
 # Map 1: SWOT pass ---------------------------------------
 ax1 = fig.add_subplot(gs[0, 1], projection=ccrs.PlateCarree())
 ax1.set_extent(lolabox, crs=ccrs.PlateCarree())
 ax1.add_feature(cfeature.LAND)
 ax1.add_feature(cfeature.COASTLINE)
-ssha_plot = ax1.pcolormesh(ssha_dac_kiel.longitude, ssha_dac_kiel.latitude, ssha_dac_kiel.values, cmap='coolwarm', transform=ccrs.PlateCarree())
+ssha_plot = ax1.pcolormesh(ssha_dac_kiel.longitude, ssha_dac_kiel.latitude, ssha_dac_kiel, cmap=cmap, transform=ccrs.PlateCarree())
 cbar1 = plt.colorbar(ssha_plot, ax=ax1, orientation='vertical', pad=0.06, aspect=30)
 ax1.set_title('SWOT SLA')
 gl1 = ax1.gridlines(draw_labels=True, alpha=0.5)
@@ -283,18 +332,44 @@ gl1.top_labels = False
 gl1.right_labels = False
 
 # Map 2: ERA5 -------------------------------------------
+wind_speed_levels = np.arange(-0.5, 21.5, 1)  # Adjusted to include up to 20.5 m/s
+
 ax2 = fig.add_subplot(gs[0, 2], projection=ccrs.PlateCarree())
 ax2.set_extent(lolabox, crs=ccrs.PlateCarree())
 ax2.add_feature(cfeature.LAND)
 ax2.add_feature(cfeature.COASTLINE)
 msl_hpa = msl / 100.0
-msl_plot = ax2.pcolormesh(msl.longitude, msl.latitude, msl_hpa, cmap='coolwarm', transform=ccrs.PlateCarree())
-cbar2 = plt.colorbar(msl_plot, ax=ax2, orientation='vertical', pad=0.02, aspect=30)
-ax2.set_title('MSLP and Wind vectors')
+
+# Define custom levels for contours
+min_value = np.floor(msl_hpa.min().item())
+max_value = np.ceil(msl_hpa.max().item())
+levels = np.arange(min_value, max_value + 5, 5)
+
+# Plot mean sea level pressure as contours with thicker grey lines
+msl_contour = ax2.contour(msl.longitude, msl.latitude, msl_hpa, levels=levels, colors='#4d4d4d', linewidths=1, transform=ccrs.PlateCarree())
+plt.clabel(msl_contour, inline=True, fontsize=8, fmt='%1.0f')
+
+# Set the colorbar range from 0 to 21 m/s for wind speed
+vmin, vmax = 0, 20
+
+# Add colorbar for wind speed with discrete levels using the custom colormap
+wind_speed_plot = ax2.contourf(u10.longitude, u10.latitude, wind_speed, levels=wind_speed_levels, cmap=cmap, transform=ccrs.PlateCarree(), vmin=vmin, vmax=vmax)
+cbar = plt.colorbar(wind_speed_plot, orientation='vertical', pad=0.02, aspect=30, ticks=range(0, 21, 1))
+cbar.set_label('Wind Speed (m/s)', labelpad=10)
+
+stride = 15  # Adjust this value to reduce the number of arrows
+u10_reduced = u10[::stride, ::stride]
+v10_reduced = v10[::stride, ::stride]
+lon_reduced = u10.longitude[::stride]
+lat_reduced = u10.latitude[::stride]
+
+# Plot wind vectors with larger arrows
+plt.quiver(lon_reduced, lat_reduced, u10_reduced, v10_reduced, scale=250, width=0.005, transform=ccrs.PlateCarree())
+
 gl2 = ax2.gridlines(draw_labels=True, alpha=0.5)
 gl2.top_labels = False
 gl2.right_labels = False
-ax2.quiver(u10.longitude, u10.latitude, u10, v10, scale=500, transform=ccrs.PlateCarree())
+ax2.quiver(u10.longitude, u10.latitude, u10, v10, scale=100, transform=ccrs.PlateCarree())
 
 # Map 3: SCHISM ----------------------------------------
 ax3 = fig.add_subplot(gs[0, 3], projection=ccrs.PlateCarree())
@@ -302,9 +377,10 @@ ax3.set_extent(lolabox, crs=ccrs.PlateCarree())
 ax3.add_feature(cfeature.LAND)
 ax3.add_feature(cfeature.COASTLINE)
 triang = Triangulation(lonSC, latSC, tri)
-collection = ax3.tripcolor(triang, sshSC, shading='flat', cmap='coolwarm')
+collection = ax3.tripcolor(triang, sshSC, shading='flat', cmap=cmap)
 cbar3 = plt.colorbar(collection, ax=ax3, orientation='vertical', pad=0.02)
 ax3.set_title('SCHISM Model')
+ax3.plot(lonTG[0], latTG[0], 'pk', markerfacecolor='k', markersize=10, transform=ccrs.PlateCarree())
 gl3 = ax3.gridlines(draw_labels=True, alpha=0.5)
 gl3.top_labels = False
 gl3.right_labels = False
@@ -312,6 +388,3 @@ gl3.right_labels = False
 # Adjust layout
 plt.tight_layout()
 plt.show()
-
-
-plt.plot()
