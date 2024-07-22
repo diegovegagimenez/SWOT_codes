@@ -302,3 +302,39 @@ plt.xlabel('Point Index')
 plt.ylabel('Data Value')
 plt.title('Transect Values')
 plt.show()
+
+fig, ax = plt.subplots(figsize=(10, 8), subplot_kw={'projection': ccrs.PlateCarree()})
+ax.set_extent([lonmin, lonmax, latmin, latmax], crs=ccrs.PlateCarree())
+
+# Plot the regridded data
+mesh = ax.pcolormesh(lon_new, lat_new, data_new, cmap=cmap, shading='auto', transform=ccrs.PlateCarree())
+
+# Add grid lines
+gl = ax.gridlines(draw_labels=True, linestyle='--')
+gl.top_labels = False
+gl.right_labels = False
+
+# Add colorbar
+cbar = plt.colorbar(mesh, ax=ax, orientation='vertical', pad=0.02)
+cbar.set_label('Sea Level Elevation (m)')
+
+# Plot additional markers
+ax.plot(kiel_lon, kiel_lat, 'pk', markerfacecolor='k', markersize=10, transform=ccrs.PlateCarree())
+
+# Add the transect points
+ax.plot(transect_lons, transect_lats, 'r-', marker='o', markersize=5, transform=ccrs.PlateCarree(), label='Transect')
+
+# Add geographic features
+ax.add_feature(cfeature.COASTLINE, zorder=3)
+ax.add_feature(cfeature.BORDERS, linestyle=':', zorder=3)
+ax.add_feature(cfeature.LAND, facecolor=[.8, .8, .8], zorder=3)  # Land color
+
+# Set color limits
+mesh.set_clim(-1, 12)
+
+# Set title and legend
+plt.title(peak_date)
+plt.legend()
+
+# Show plot
+plt.show()
