@@ -253,3 +253,52 @@ print(f"Perpendicular Line Endpoints:")
 print(f"Point 1: Latitude: {perp_lat1}, Longitude: {perp_lon1}")
 print(f"Point 2: Latitude: {perp_lat2}, Longitude: {perp_lon2}")
 
+
+def create_transect_points(start_lat, start_lon, end_lat, end_lon, num_points=100):
+    """
+    Create points along a transect between two geographic coordinates.
+    
+    Args:
+    start_lat, start_lon: Starting coordinates of the transect.
+    end_lat, end_lon: Ending coordinates of the transect.
+    num_points: Number of points along the transect.
+    
+    Returns:
+    A tuple of lists (latitudes, longitudes) of the transect points.
+    """
+    lats = np.linspace(start_lat, end_lat, num_points)
+    lons = np.linspace(start_lon, end_lon, num_points)
+    return lats, lons
+
+def extract_transect_values(data_array, lats, lons, lon_grid, lat_grid):
+    """
+    Extract values along a transect from a DataArray.
+    
+    Args:
+    data_array: xarray DataArray with the data.
+    lats, lons: Coordinates of the transect.
+    lon_grid, lat_grid: 2D arrays of longitude and latitude coordinates of the grid.
+    
+    Returns:
+    Values along the transect.
+    """
+    # Flatten the grid coordinates for interpolation
+    grid_points = np.vstack([lon_grid.ravel(), lat_grid.ravel()]).T
+    data_values = data_array.ravel()
+    
+    # Interpolate the data values at the transect points
+    transect_values = griddata(grid_points, data_values, (lons, lats), method='linear')
+    
+    return transect_values
+
+
+transect_lats, transect_lons = create_transect_points(perp_lat1, perp_lon1, perp_lat2, perp_lon2)
+
+transect_values = extract_transect_values(data_new, transect_lats, transect_lons, lon_new, lat_new)
+
+
+plt.plot(np.arange(len(transect_values)), transect_values)
+plt.xlabel('Point Index')
+plt.ylabel('Data Value')
+plt.title('Transect Values')
+plt.show()
