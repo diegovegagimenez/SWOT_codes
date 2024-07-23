@@ -6,6 +6,7 @@ import os
 import cartopy.crs as ccrs
 import warnings
 import cartopy.feature as cfeature
+from tqdm import tqdm
 import statsmodels.api as sm  # for LOWESS filter
 # Set the warning filter to "ignore" to suppress all warnings
 warnings.filterwarnings("ignore")
@@ -294,7 +295,7 @@ for rad in dmedia:
         # Loop through all netCDF files in the product folder
         nc_files = [f for f in os.listdir(folder_path) if f.endswith('.nc')]
 
-        for filename in nc_files:
+        for filename in tqdm(nc_files):
             file_path = os.path.join(folder_path, filename)
 
             if product_name in ['SWOT L3', 'SWOT L3 unsmoothed']:  # ------------------------------------------------------------------------------------------
@@ -808,14 +809,14 @@ for rad in dmedia:
     # # table_all_swot_l3_unsmoothed.to_excel(f'table_all_swot_l3_unsmoothed_{rad}.xlsx')
     
     # PLOT HISTOGRAMS OF VARIANCES PER STATION TO CHECK THE DISTRIBUTION
-    # change rmsd names for joining dataframes
+
     table_all_tg = table_all_swot_l3[['station', 'var_TG']]
 
     table_all_tg = table_all_duacs_swot_l4.rename(columns={'var_TG': 'var'})  # Use the same name for the TG variances
-    table_all_swot_l3 = table_all_swot_l3.rename(columns={'var_swot_l3': 'var'})
-    table_all_cmems_eur = table_all_cmems_eur.rename(columns={'var_cmems_eur': 'var'})
-    table_all_cmems_glo = table_all_cmems_glo.rename(columns={'var_cmems_glo': 'var'})
-    table_all_duacs_swot_l4 = table_all_duacs_swot_l4.rename(columns={'var_CMEMS_duacs_swot_l4': 'var'})
+    table_all_swot_l3 = table_all_swot_l3.rename(columns={'var_swot_l3': 'var', 'rmsd_swot_l3': 'rmsd'})
+    table_all_cmems_eur = table_all_cmems_eur.rename(columns={'var_cmems_eur': 'var', 'rmsd_cmems_eur': 'rmsd'})
+    table_all_cmems_glo = table_all_cmems_glo.rename(columns={'var_cmems_glo': 'var', 'rmsd_cmems_glo': 'rmsd'})
+    table_all_duacs_swot_l4 = table_all_duacs_swot_l4.rename(columns={'var_CMEMS_duacs_swot_l4': 'var', 'rmsd_duacs_swot_l4': 'rmsd'})
     
     table_all_tg['source'] = 'tg'
     table_all_swot_l3['source'] = 'table_all_swot_l3'
@@ -827,26 +828,33 @@ for rad in dmedia:
     combined_df = pd.concat([table_all_tg, table_all_swot_l3, table_all_cmems_eur, table_all_cmems_glo, table_all_duacs_swot_l4])
     
     # Pivot the combined dataframe to have sources as columns
-    pivot_df = combined_df.pivot(index='station', columns='source', values='var')
-    pivot_df = pivot_df.reset_index()
+    pivot_df_var = combined_df.pivot(index='station', columns='source', values='var')
+    pivot_df_var = pivot_df_var.reset_index()
     
-    # Define the positions for the bars
-    stations = pivot_df['station']
-    bar_width = 0.2
-    x = np.arange(len(stations))
+    pivot_df_rmsd = combined_df.pivot(index='station', columns='source', values='rmsd')
+    pivot_df_rmsd = pivot_df_rmsd.reset_index()
+
+    # PLOTTING HISTOGRAM FOR VARIANCE
+    stations = pivot_df_var['station']
+    num_stations = len(stations)
+    bar_width = 1.5
+    space_between_groups = 2  # Adjust this to set the space between groups
+
+# Create a new x array with extra space between groups
+    x = np.arange(num_stations) * (5 * bar_width + space_between_groups)
 
     # Plotting
     fig, ax = plt.subplots()
 
-    ax.bar(x - 1.5 * bar_width, pivot_df['table_all_swot_l3'], width=bar_width, label='SWOT L3')
-    ax.bar(x - 0.5 * bar_width, pivot_df['table_all_duacs_swot_l4'], width=bar_width, label='DUACS_SWOT_L4')    
-    ax.bar(x + 0.5 * bar_width, pivot_df['table_all_cmems_glo'], width=bar_width, label='NRT_GLO')
-    ax.bar(x + 1.5 * bar_width, pivot_df['table_all_cmems_eur'], width=bar_width, label='NRT_EUR')
-    # ax.bar(x + 1.5 * bar_width, pivot_df['tg'], width=bar_width, label='TG')
+    ax.bar(x - 2 * bar_width, pivot_df_var['tg'], width=bar_width, label='TG')
+    ax.bar(x - 1 * bar_width, pivot_df_var['table_all_swot_l3'], width=bar_width, label='SWOT L3')
+    ax.bar(x - 0 * bar_width, pivot_df_var['table_all_duacs_swot_l4'], width=bar_width, label='DUACS_SWOT_L4')    
+    ax.bar(x + 1 * bar_width, pivot_df_var['table_all_cmems_glo'], width=bar_width, label='NRT_GLO')
+    ax.bar(x + 2 * bar_width, pivot_df_var['table_all_cmems_eur'], width=bar_width, label='NRT_EUR')
     
     # Add labels and title
     ax.set_xlabel('Tide Gauges')
-    ax.set_ylabel('Variance (m²)')
+    ax.set_ylabel('Variance (cm²)')
     ax.set_title(f'Variance of altimetry products at {rad} km radius')
     ax.set_xticks(x)
     ax.set_xticklabels(stations, rotation=90, fontsize='small')
@@ -855,9 +863,74 @@ for rad in dmedia:
 
     plt.show()
 
-
     # plt.savefig(f'{path}histograms/variances_{rad}.png')
 
+    # PLOTTING HISTOGRAM FOR RMSD
+    # Define the positions for the bars
+    stations = pivot_df_rmsd['station']
+    bar_width = 0.2
+    x = np.arange(len(stations))
+    # Plotting
+    fig, ax = plt.subplots()
+
+    ax.bar(x - 1.5 * bar_width, pivot_df_rmsd['table_all_swot_l3'], width=bar_width, label='SWOT L3')
+    ax.bar(x - 0.5 * bar_width, pivot_df_rmsd['table_all_duacs_swot_l4'], width=bar_width, label='DUACS_SWOT_L4')    
+    ax.bar(x + 0.5 * bar_width, pivot_df_rmsd['table_all_cmems_glo'], width=bar_width, label='NRT_GLO')
+    ax.bar(x + 1.5 * bar_width, pivot_df_rmsd['table_all_cmems_eur'], width=bar_width, label='NRT_EUR')
+    
+    # Add labels and title
+    ax.set_xlabel('Tide Gauges')
+    ax.set_ylabel('RMSD (cm²)')
+    ax.set_title(f'RMSD of altimetry products at {rad} km radius')
+    ax.set_xticks(x)
+    ax.set_xticklabels(stations, rotation=90, fontsize='small')
+    ax.legend(fontsize='small')
+    ax.grid(True, which='both', axis='both', color='gray', linestyle='--', linewidth=0.5, alpha=0.5)
+
+    plt.show()
+
+    # PERCENTAGE OF IMPROVEMENT
+    improvement_cmems_eur = (table_all_swot_l3['rmsd'] - table_all_cmems_eur['rmsd'])/table_all_swot_l3['rmsd']*100
+    improvement_cmems_glo = (table_all_swot_l3['rmsd'] - table_all_cmems_glo['rmsd'])/table_all_swot_l3['rmsd']*100
+    improvement_duacs_swot_l4 = (table_all_swot_l3['rmsd'] - table_all_duacs_swot_l4['rmsd'])/table_all_swot_l3['rmsd']*100
+
+# Example station names (replace with your actual station names if different)
+
+    # Combine improvements into a DataFrame
+    improvement_df = pd.DataFrame({
+        'Station': stations,
+        'CMEMS EUR': improvement_cmems_eur.values.flatten(),
+        'CMEMS GLO': improvement_cmems_glo.values.flatten(),
+        'DUACS SWOT L4': improvement_duacs_swot_l4.values.flatten()
+    })
+
+    # Set 'Station' as the index
+    improvement_df.set_index('Station', inplace=True)
+
+    # Plotting
+    fig, ax = plt.subplots(figsize=(14, 8))  # Adjust the figure size as needed
+
+    # Define bar width and positions
+    bar_width = 0.2
+    x = np.arange(len(improvement_df))
+
+    # Plot bars for each product
+    ax.bar(x - bar_width, improvement_df['CMEMS EUR'], width=bar_width, label='CMEMS EUR')
+    ax.bar(x, improvement_df['CMEMS GLO'], width=bar_width, label='CMEMS GLO')
+    ax.bar(x + bar_width, improvement_df['DUACS SWOT L4'], width=bar_width, label='DUACS SWOT L4')
+
+    # Add labels and title
+    ax.set_xlabel('Stations')
+    ax.set_ylabel('Percentage Improvement (%)')
+    ax.set_title('Percentage Improvement of Products Compared to SWOT_L3')
+    ax.set_xticks(x)
+    ax.set_xticklabels(improvement_df.index, rotation=90, fontsize='small')
+    ax.legend(fontsize='small')
+    ax.grid(True, which='both', axis='y', color='gray', linestyle='--', linewidth=0.5, alpha=0.5)
+
+    # Show the plot
+    plt.tight_layout()
+    plt.show()
     # Average RMSD values taking in account the non-linear behaviour of the RMSD
     # Delete the wrong rows/tgs from rmsds
     threshold = 10  # RMSD > 5 out
