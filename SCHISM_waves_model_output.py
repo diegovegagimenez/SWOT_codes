@@ -13,6 +13,7 @@ from scipy.interpolate import griddata
 from geopy.distance import geodesic
 from geopy.point import Point
 import numpy as np
+from utide import solve, reconstruct
 
 
 # Define the RGB values for your custom color palette
@@ -55,12 +56,16 @@ def haversine(lon1, lat1, lon2, lat2):
 # Paths
 SWOT_path = '/home/dvega/anaconda3/work/SWOT_STORM/'
 model_path = '/storage/ada/alexandre/malla_ref_3000/oleaje23_24/'
+model_path = '/home/amores/SWOT/A_data/C_modelo/'
+
 era5_path = '/home/dvega/anaconda3/work/SWOT_STORM/ERA5/'
 tri_file_path = '/home/amores/SWOT/A_data/C_modelo/'
 
 # Load data
-model23 = xr.open_dataset(f'{model_path}outputs_2023/merged_elevation_2023.nc')
-model24 = xr.open_dataset(f'{model_path}outputs_2024/merged_elevation_2024.nc')
+# model23 = xr.open_dataset(f'{model_path}outputs_2023/merged_elevation_2023.nc')
+# model24 = xr.open_dataset(f'{model_path}outputs_2024/merged_elevation_2024.nc')
+model23 = xr.open_dataset(f'{model_path}merged_elevation_2023.nc')
+model24 = xr.open_dataset(f'{model_path}merged_elevation_2024.nc')
 model = xr.concat([model23, model24], dim='time')
 model_df = model.to_dataframe().reset_index()
 
@@ -144,13 +149,39 @@ ts_kiel_SC = df_filtered_kiel.groupby('time')['elevation'].mean().reset_index()
 ts_alte_SC = df_filtered_alte.groupby('time')['elevation'].mean().reset_index()
 
 
-plt.plot(ts_kiel_SC['time'], ts_kiel_SC['elevation'])
-plt.plot(ts_alte_SC['time'], ts_alte_SC['elevation'])
+# DETIDE SCHISM TIME SERIE
+coef_k_SC = solve(ts_kiel_SC['time'], ts_kiel_SC['elevation'],
+             lat=kiel_lat,
+             nodal=False,
+             trend=False,
+             method='ols',
+             conf_int='linear',
+             verbose=False,)
+
+coef_a_SC = solve(ts_alte_SC['time'], ts_alte_SC['elevation'],
+             lat=alte_lat,
+             nodal=False,
+             trend=False,
+             method='ols',
+             conf_int='linear',
+             verbose=False)
+
+tide_k_SC = reconstruct(ts_kiel_SC['time'], coef_k_SC, verbose=False)
+tide_a_SC = reconstruct(ts_alte_SC['time'], coef_a_SC, verbose=False)
+
+ts_kiel_SC['detided'] = ts_kiel_SC['elevation'] - tide_k_SC.h
+ts_alte_SC['detided'] = ts_alte_SC['elevation'] - tide_a_SC.h
+
+plt.plot(ts_kiel_SC['time'], ts_kiel_SC['detided'])
+plt.grid(True, alpha=0.3)
+plt.xticks(rotation=45)
+
+plt.plot(ts_alte_SC['time'], ts_alte_SC['detided'])
+plt.grid(True, alpha=0.3)
+plt.xticks(rotation=45)
 
 
-
-# OBTAIN PERPENDICULAR LINE TO THE COAST
-
+# -------------------------- OBTAIN PERPENDICULAR LINE TO THE COAST -------------------------------------------
 # Regrid data
 
 # Define the target grid resolution
@@ -196,15 +227,13 @@ ax.add_feature(cfeature.BORDERS, linestyle=':', zorder=3)
 ax.add_feature(cfeature.LAND, facecolor=[.8, .8, .8], zorder=3)  # Land color
 
 # Set color limits
-mesh.set_clim(-1, 12)
+mesh.set_clim(np.min(data_new), np.max(data_new))
 
 # Set title
 plt.title(peak_date)
 
 # Show plot
 plt.show()
-
-
 
 
 def perpendicular_line(lat1, lon1, lat2, lon2, distance=10000):
@@ -243,8 +272,11 @@ def perpendicular_line(lat1, lon1, lat2, lon2, distance=10000):
     return point1.latitude, point1.longitude, point2.latitude, point2.longitude
 
 # Example coastline segment coordinates
-lat1, lon1 = 54.4825, 10.1406
-lat2, lon2 = 54.4335, 10.3359
+lat1, lon1 = 54.5232, 10.204896
+lat2, lon2 = 54.4800, 10.349574
+
+lat1_alte, lon1_alte = 53.857516, 8.106725
+lat2_alte, lon2_alte = 53.872264, 8.110508
 
 # Calculate the perpendicular line with a length of 10 km on each side
 perp_lat1, perp_lon1, perp_lat2, perp_lon2 = perpendicular_line(lat1, lon1, lat2, lon2, distance=20000)
@@ -291,8 +323,11 @@ def extract_transect_values(data_array, lats, lons, lon_grid, lat_grid):
     
     return transect_values
 
+mid_lat = (lat1 + lat2) / 2
+mid_lon = (lon1 + lon2) / 2
 
 transect_lats, transect_lons = create_transect_points(perp_lat1, perp_lon1, perp_lat2, perp_lon2)
+transect_lats, transect_lons = create_transect_points(mid_lat, mid_lon, perp_lat2, perp_lon2)
 
 transect_values = extract_transect_values(data_new, transect_lats, transect_lons, lon_new, lat_new)
 
@@ -301,6 +336,7 @@ plt.plot(np.arange(len(transect_values)), transect_values)
 plt.xlabel('Point Index')
 plt.ylabel('Data Value')
 plt.title('Transect Values')
+plt.grid(True, alpha=0.3)
 plt.show()
 
 fig, ax = plt.subplots(figsize=(10, 8), subplot_kw={'projection': ccrs.PlateCarree()})
@@ -310,7 +346,7 @@ ax.set_extent([lonmin, lonmax, latmin, latmax], crs=ccrs.PlateCarree())
 mesh = ax.pcolormesh(lon_new, lat_new, data_new, cmap=cmap, shading='auto', transform=ccrs.PlateCarree())
 
 # Add grid lines
-gl = ax.gridlines(draw_labels=True, linestyle='--')
+gl = ax.gridlines(draw_labels=True, linestyle='--', zorder=5)
 gl.top_labels = False
 gl.right_labels = False
 
@@ -321,16 +357,17 @@ cbar.set_label('Sea Level Elevation (m)')
 # Plot additional markers
 ax.plot(kiel_lon, kiel_lat, 'pk', markerfacecolor='k', markersize=10, transform=ccrs.PlateCarree())
 
-# Add the transect points
-ax.plot(transect_lons, transect_lats, 'r-', marker='o', markersize=5, transform=ccrs.PlateCarree(), label='Transect')
-
 # Add geographic features
 ax.add_feature(cfeature.COASTLINE, zorder=3)
 ax.add_feature(cfeature.BORDERS, linestyle=':', zorder=3)
 ax.add_feature(cfeature.LAND, facecolor=[.8, .8, .8], zorder=3)  # Land color
 
+# Add the transect points
+ax.plot(transect_lons, transect_lats, 'black', marker='|', markersize=5, transform=ccrs.PlateCarree(), label='Transect', zorder=4)
+
 # Set color limits
-mesh.set_clim(-1, 12)
+# mesh.set_clim(-1, 12)
+mesh.set_clim(np.min(data_new), np.max(data_new))
 
 # Set title and legend
 plt.title(peak_date)
