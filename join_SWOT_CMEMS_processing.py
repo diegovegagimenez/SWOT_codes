@@ -13,6 +13,7 @@ warnings.filterwarnings("ignore")
 import loess_smooth_handmade as loess  # for LOESS filter
 import math
 from sklearn.preprocessing import MinMaxScaler
+import seaborn as sns
 
 
 # ----------------------------------PARAMETERS------------------------------------------------------------------------
