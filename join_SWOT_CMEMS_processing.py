@@ -12,6 +12,8 @@ import statsmodels.api as sm  # for LOWESS filter
 warnings.filterwarnings("ignore")
 import loess_smooth_handmade as loess  # for LOESS filter
 import math
+from sklearn.preprocessing import MinMaxScaler
+
 
 # ----------------------------------PARAMETERS------------------------------------------------------------------------
 # Strategy for selecting CMEMS data points around tide gauge locations
@@ -20,7 +22,7 @@ import math
 strategy = 0
 
 # Maximum distance from each CMEMS point to the tide gauge location
-dmedia = np.arange(20, 65, 5)  # Array of distances from 5 to 110 km in 5 km increments
+dmedia = np.arange(20, 25, 5)  # Array of distances from 5 to 110 km in 5 km increments
 
 # Window size for the LOESS filter (in days)
 day_window = 7
@@ -846,13 +848,18 @@ for rad in dmedia:
     # Plotting
     fig, ax = plt.subplots()
 
-    ax.bar(x - 2 * bar_width, pivot_df_var['tg'], width=bar_width, label='TG')
-    ax.bar(x - 1 * bar_width, pivot_df_var['table_all_swot_l3'], width=bar_width, label='SWOT L3')
-    ax.bar(x - 0 * bar_width, pivot_df_var['table_all_duacs_swot_l4'], width=bar_width, label='DUACS_SWOT_L4')    
-    ax.bar(x + 1 * bar_width, pivot_df_var['table_all_cmems_glo'], width=bar_width, label='NRT_GLO')
-    ax.bar(x + 2 * bar_width, pivot_df_var['table_all_cmems_eur'], width=bar_width, label='NRT_EUR')
+    # ax.bar(x - 2 * bar_width, pivot_df_var['tg'], width=bar_width, label='TG', color="#9467bd")
+    # ax.bar(x - 1 * bar_width, pivot_df_var['table_all_swot_l3'], width=bar_width, label='SWOT L3', color = '#1f77b4')
+    # ax.bar(x - 0 * bar_width, pivot_df_var['table_all_duacs_swot_l4'], width=bar_width, label='DUACS_SWOT_L4', color = '#ff7f0e')    
+    # ax.bar(x + 1 * bar_width, pivot_df_var['table_all_cmems_glo'], width=bar_width, label='NRT_GLO', color = '#2ca02c')
+    # ax.bar(x + 2 * bar_width, pivot_df_var['table_all_cmems_eur'], width=bar_width, label='NRT_EUR', color = '#d62728')
     
-    # Add labels and title
+    ax.bar(x - 3 * bar_width, pivot_df_var['table_all_swot_l3'], width=bar_width, label='SWOT L3', color='#1f77b4')
+    ax.bar(x - 2 * bar_width, pivot_df_var['table_all_duacs_swot_l4'], width=bar_width, label='DUACS_SWOT_L4', color='#ff7f0e')
+    ax.bar(x - 1 * bar_width, pivot_df_var['table_all_cmems_glo'], width=bar_width, label='NRT_GLO', color='#2ca02c')
+    ax.bar(x - 0 * bar_width, pivot_df_var['table_all_cmems_eur'], width=bar_width, label='NRT_EUR', color='#d62728')
+    ax.bar(x + 1 * bar_width, pivot_df_var['tg'], width=bar_width, label='TG', color="#9467bd")
+        # Add labels and title
     ax.set_xlabel('Tide Gauges')
     ax.set_ylabel('Variance (cm²)')
     ax.set_title(f'Variance of altimetry products at {rad} km radius')
@@ -1114,3 +1121,160 @@ plt.show()
 # plt.show()
 
 # plt.savefig('rmsd_vs_radius_5_prod.png')
+
+# ----------------- CALCULATE PROPORTION BETWEEN RMSD AND VARIANCE --------------------------
+
+
+# Initialize MinMaxScaler
+scaler = MinMaxScaler()
+
+# Normalize the variances and RMSDs
+variances = {
+    'swot_l3': variances_swot_l3,
+    'cmems_eur': variances_cmems_eur,
+    'cmems_glo': variances_cmems_glo,
+    'duacs_swot_l4': variances_duacs_swot_l4
+}
+
+rmsds = {
+    'swot_l3': rmsds_swot_l3,
+    'cmems_eur': rmsds_cmems_eur,
+    'cmems_glo': rmsds_cmems_glo,
+    'duacs_swot_l4': rmsds_duacs_swot_l4
+}
+
+# Convert to DataFrames for scaling
+var_df = pd.DataFrame(variances)
+rmsd_df = pd.DataFrame(rmsds)
+
+# Normalize
+var_df_normalized = pd.DataFrame(scaler.fit_transform(var_df), columns=var_df.columns)
+rmsd_df_normalized = pd.DataFrame(scaler.fit_transform(rmsd_df), columns=rmsd_df.columns)
+
+# Decide on weights based on the relative importance of variance and RMSD
+weights = {
+    'variance': 0.5,
+    'rmsd': 0.5
+}
+
+# Initialize an empty dictionary to hold the composite scores
+composite_scores = {}
+
+
+# ------------------ MEDIA DE TODOS LAS ESTACIONES PARA CADA PRODUCTO ---------------------------------------------------
+for product in variances.keys():
+    # Weighted sum of normalized variance and RMSD
+    composite_scores[product] = (
+        weights['variance'] * var_df_normalized[product].mean() +
+        weights['rmsd'] * rmsd_df_normalized[product].mean()
+    )
+
+# Convert to DataFrame for easy handling
+composite_scores_df = pd.DataFrame(list(composite_scores.items()), columns=['Product', 'Composite Score'])
+
+
+# ------------------ PROPORCION PARA CADA ESTACION Y PRODUCTO --------------------------------------------
+# Inicializa un diccionario para almacenar las proporciones
+proportions = {}
+
+
+# Calcula la proporción entre varianza y RMSD para cada producto
+for product in variances.keys():
+    # Asegúrate de que ambos DataFrames tengan las mismas estaciones
+    var_normalized = var_df_normalized[product]
+    rmsd_normalized = rmsd_df_normalized[product]
+    
+    # Calcula la proporción y maneja posibles divisiones por cero
+    proportion = np.divide(var_normalized, rmsd_normalized, out=np.zeros_like(var_normalized), where=rmsd_normalized != 0)
+    
+    # Guarda la proporción en el diccionario
+    proportions[product] = proportion
+
+# Convierte el diccionario de proporciones en un DataFrame
+proportions_df = pd.DataFrame(proportions, index=var_df_normalized.index)
+
+# ------------ INDICE COMBINADO DE DESEMPEÑO ---------------------------
+# ------------ COMBINED PERFORMANCE INDEX --------------------------------------
+
+# Definir los pesos para RMSD y Varianza (ajusta estos valores según tus necesidades)
+alpha = 0.5  # Peso para RMSD
+beta = 0.5   # Peso para Varianza (inverso)
+
+# Invertir la varianza normalizada
+var_df_inverted = 1 / var_df_normalized
+
+# Calcular el Índice Combinado de Desempeño (ICD)
+# ICD = alpha * RMSD_normalized + beta * 1/Varianza_normalized
+icd_df = alpha * rmsd_df_normalized + beta * var_df_inverted
+
+icd_df = 1/icd_df
+# Opcional: Normalizar el ICD para que también esté en un rango entre 0 y 1
+scaler_icd = MinMaxScaler()
+icd_df_normalized = pd.DataFrame(scaler_icd.fit_transform(icd_df), columns=icd_df.columns)
+
+# Mostrar el DataFrame con los ICD normalizados
+print(icd_df_normalized)
+
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+# Calcular el ICD para el tamaño de los puntos
+# Asumimos que icd_df_normalized ya está calculado
+icd_sizes = icd_df_normalized * 1000  # Escalar para que los puntos sean visibles
+
+# Crear un gráfico de dispersión con tamaños y colores diferenciados
+plt.figure(figsize=(12, 8))
+
+# Iterar sobre cada estación para añadir colores diferentes
+for i, station in enumerate(var_df_normalized.index):
+    plt.scatter(rmsd_df_normalized.iloc[i], var_df_normalized.iloc[i], 
+                s=icd_sizes.iloc[i], label=station, alpha=0.6, edgecolor='k')
+
+# Añadir líneas de referencia en las medianas
+plt.axvline(rmsd_df_normalized.median().median(), color='grey', linestyle='--')
+plt.axhline(var_df_normalized.median().median(), color='grey', linestyle='--')
+
+# Etiquetas y título
+plt.xlabel('RMSD Normalizado')
+plt.ylabel('Varianza Normalizada')
+plt.title('Gráfico de Dispersión de RMSD vs Varianza Normalizada por Estación y Producto')
+
+# Leyenda y ajuste
+plt.legend(title='Estación', bbox_to_anchor=(1.05, 1), loc='upper left')
+plt.grid(True)
+
+# Mostrar el gráfico
+plt.show()
+
+import matplotlib.pyplot as plt
+import seaborn as sns
+import pandas as pd
+
+# Suponiendo que var_df_normalized y rmsd_df_normalized ya están disponibles
+
+# Unir los DataFrames normalizados en un solo DataFrame largo (long format) para usar en Seaborn
+data = pd.DataFrame({
+    'RMSD_Normalizado': rmsd_df_normalized.melt(var_name='Producto', value_name='RMSD_Normalizado')['RMSD_Normalizado'],
+    'Varianza_Normalizada': var_df_normalized.melt(var_name='Producto', value_name='Varianza_Normalizada')['Varianza_Normalizada'],
+    'Producto': rmsd_df_normalized.columns.repeat(rmsd_df_normalized.shape[0])
+})
+
+# Crear el gráfico de dispersión con líneas de regresión para cada producto
+plt.figure(figsize=(12, 8))
+sns.scatterplot(data=data, x='RMSD_Normalizado', y='Varianza_Normalizada', hue='Producto', s=100, edgecolor='k')
+
+# Añadir líneas de regresión para cada producto
+sns.lmplot(data=data, x='RMSD_Normalizado', y='Varianza_Normalizada', hue='Producto', markers='o', 
+           aspect=1.5, height=6, ci=None)
+
+# Etiquetas y título
+plt.xlabel('RMSD Normalizado')
+plt.ylabel('Varianza Normalizada')
+plt.title('Gráfico de Dispersión con Líneas de Regresión por Producto')
+
+# Mostrar el gráfico
+plt.show()
+
+
+
+
