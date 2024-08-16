@@ -690,3 +690,43 @@ results_df
 # # Optionally, add a legend
 # ax.legend(loc="upper left")
 # plt.show()
+
+
+# Add station names to the map
+fig, ax = plt.subplots(figsize=(10.5, 11), subplot_kw=dict(projection=ccrs.PlateCarree()))
+
+# Define the lon-lat box
+lolabox = [5.75, 6.25, 42.9, 43.2]
+ax.set_extent(lolabox, crs=ccrs.PlateCarree())
+
+# Scatter plot for Tarragona Tide Gauge
+ax.scatter(tg_ts['longitude'][0], tg_ts['latitude'][0], c='g', marker='o', s=120, transform=ccrs.Geodetic(), label='Tide Gauge Tarragona', zorder=3)
+
+# Reset the index to ensure it's continuous
+df_tg_dropna = df_tg_dropna.reset_index(drop=True)
+
+# Scatter plot for other tide gauges
+ax.scatter(table_all['longitude'][:-1], table_all['latitude'][:-1], c='black', marker='o', s=40, transform=ccrs.Geodetic(), label='Other tide gauges', zorder=2)
+
+# Add station names next to the markers
+for i in np.arange(1,8,1):  # Skip the last element as in your scatter plot
+    ax.text(table_all['longitude'][i] + 0.01, table_all['latitude'][i], 
+            table_all['station'][i], fontsize=9, transform=ccrs.Geodetic(), 
+            ha='left', va='center', zorder=4, color='black')
+
+# Scatter plots for SWOT footprints
+ax.scatter(lonsw1.flatten(), latsw1.flatten(), c=color, s=0.5, alpha=alphav, zorder=0, transform=ccrs.PlateCarree())
+ax.scatter(lonsw2.flatten(), latsw2.flatten(), c=color, s=0.5, alpha=alphav, zorder=0, transform=ccrs.PlateCarree())
+ax.scatter(lonnd1.flatten(), latnd1.flatten(), c=color, s=0.5, alpha=alphav, zorder=0, transform=ccrs.PlateCarree())
+ax.scatter(lonnd2.flatten(), latnd2.flatten(), c=color, s=0.5, alpha=alphav, zorder=0, transform=ccrs.PlateCarree())
+
+# Add coastlines, gridlines, and land feature
+ax.coastlines()
+ax.gridlines(draw_labels=True)
+ax.add_feature(cfeature.LAND, edgecolor='black', facecolor='grey', zorder=1)
+
+# Add legend
+ax.legend(loc="upper left")
+
+plt.show()
+
