@@ -13,7 +13,6 @@ warnings.filterwarnings("ignore")
 import loess_smooth_handmade as loess  # for LOESS filter
 import math
 from sklearn.preprocessing import MinMaxScaler
-import seaborn as sns
 
 
 # ----------------------------------PARAMETERS------------------------------------------------------------------------
@@ -23,7 +22,7 @@ import seaborn as sns
 strategy = 0
 
 # Maximum distance from each CMEMS point to the tide gauge location
-dmedia = np.arange(20, 25, 5)  # Array of distances from 5 to 110 km in 5 km increments
+dmedia = np.arange(100, 101, 1)  # Array of distances from 5 to 110 km in 5 km increments
 
 # Window size for the LOESS filter (in days)
 day_window = 7
@@ -692,11 +691,11 @@ for rad in dmedia:
                 # n_val_swot_l3_unsmoothed.append(swot_l3_unsmoothed['n_val_swot_l3_unsmoothed'].mean())
 
                 # PLOTTING TIME SERIES
-                # plot_time_series(swot_l3, tg_ts, rmsd_swot_l3, corr_swot_l3, product_name='SWOT L3', station=station, rad=rad, plot_path=products[3]['plot_path'])
-                # plot_time_series(cmems_eur, tg_ts, rmsd_cmems_eur, corr_cmems_eur, product_name='CMEMS NRT EUR', station=station, rad=rad, plot_path=products[1]['plot_path'])
-                # plot_time_series(cmems_glo, tg_ts, rmsd_cmems_glo, corr_cmems_glo, product_name='CMEMS NRT GLO', station=station, rad=rad,  plot_path=products[2]['plot_path'])
-                # plot_time_series(duacs_swot_l4, tg_ts, rmsd_duacs_swot_l4, corr_duacs_swot_l4, product_name='DUACS SWOT L4', station=station, rad=rad, plot_path=products[0]['plot_path'])
-                # # plot_time_series(swot_l3_unsmoothed, tg_ts)
+                plot_time_series(swot_l3, tg_ts, rmsd_swot_l3, corr_swot_l3, product_name='SWOT L3', station=station, rad=rad, plot_path=products[3]['plot_path'])
+                plot_time_series(cmems_eur, tg_ts, rmsd_cmems_eur, corr_cmems_eur, product_name='CMEMS NRT EUR', station=station, rad=rad, plot_path=products[1]['plot_path'])
+                plot_time_series(cmems_glo, tg_ts, rmsd_cmems_glo, corr_cmems_glo, product_name='CMEMS NRT GLO', station=station, rad=rad,  plot_path=products[2]['plot_path'])
+                plot_time_series(duacs_swot_l4, tg_ts, rmsd_duacs_swot_l4, corr_duacs_swot_l4, product_name='DUACS SWOT L4', station=station, rad=rad, plot_path=products[0]['plot_path'])
+                # plot_time_series(swot_l3_unsmoothed, tg_ts)
 
                 # MAP PLOT OF CMEMS LOCATIONS OBTAINED FROM EACH GAUGE!
                 # fig, ax = plt.subplots(figsize=(10.5, 11), subplot_kw=dict(projection=ccrs.PlateCarree()))
@@ -898,19 +897,28 @@ for rad in dmedia:
     plt.show()
 
     # PERCENTAGE OF IMPROVEMENT
-    improvement_cmems_eur = (table_all_swot_l3['rmsd'] - table_all_cmems_eur['rmsd'])/table_all_swot_l3['rmsd']*100
-    improvement_cmems_glo = (table_all_swot_l3['rmsd'] - table_all_cmems_glo['rmsd'])/table_all_swot_l3['rmsd']*100
-    improvement_duacs_swot_l4 = (table_all_swot_l3['rmsd'] - table_all_duacs_swot_l4['rmsd'])/table_all_swot_l3['rmsd']*100
+    # improvement_cmems_eur = (table_all_swot_l3['rmsd'] - table_all_cmems_eur['rmsd'])/table_all_swot_l3['rmsd']*100
+    improvement_swot_l3 = (table_all_cmems_glo['rmsd'] - table_all_swot_l3['rmsd'])/table_all_cmems_glo['rmsd']*100
+    improvement_duacs_swot_l4 = (table_all_cmems_glo['rmsd'] - table_all_duacs_swot_l4['rmsd'])/table_all_cmems_glo['rmsd']*100
 
 # Example station names (replace with your actual station names if different)
 
     # Combine improvements into a DataFrame
+    # improvement_df = pd.DataFrame({
+    #     'Station': stations,
+    #     # 'CMEMS EUR': improvement_cmems_eur.values.flatten(),
+    #     'CMEMS GLO': improvement_cmems_glo.values.flatten(),
+    #     'DUACS SWOT L4': improvement_duacs_swot_l4.values.flatten()
+    # })
+
     improvement_df = pd.DataFrame({
-        'Station': stations,
-        'CMEMS EUR': improvement_cmems_eur.values.flatten(),
-        'CMEMS GLO': improvement_cmems_glo.values.flatten(),
-        'DUACS SWOT L4': improvement_duacs_swot_l4.values.flatten()
+    'Station': stations,
+    # 'CMEMS EUR': improvement_cmems_eur.values.flatten(),
+    'SWOT L3': improvement_swot_l3.values.flatten(),
+    'DUACS SWOT L4': improvement_duacs_swot_l4.values.flatten()
     })
+
+
 
     # Set 'Station' as the index
     improvement_df.set_index('Station', inplace=True)
@@ -923,14 +931,14 @@ for rad in dmedia:
     x = np.arange(len(improvement_df))
 
     # Plot bars for each product
-    ax.bar(x - bar_width, improvement_df['CMEMS EUR'], width=bar_width, label='CMEMS EUR')
-    ax.bar(x, improvement_df['CMEMS GLO'], width=bar_width, label='CMEMS GLO')
+    # ax.bar(x - bar_width, improvement_df['CMEMS EUR'], width=bar_width, label='CMEMS EUR')
+    ax.bar(x, improvement_df['SWOT L3'], width=bar_width, label='SWOT L3')
     ax.bar(x + bar_width, improvement_df['DUACS SWOT L4'], width=bar_width, label='DUACS SWOT L4')
 
     # Add labels and title
     ax.set_xlabel('Stations')
     ax.set_ylabel('Percentage Improvement (%)')
-    ax.set_title('Percentage Improvement of Products Compared to SWOT_L3')
+    ax.set_title('Percentage Improvement of Products Compared to CMEMS NRT GLO')
     ax.set_xticks(x)
     ax.set_xticklabels(improvement_df.index, rotation=90, fontsize='small')
     ax.legend(fontsize='small')
@@ -1279,3 +1287,142 @@ plt.show()
 
 
 
+import matplotlib.pyplot as plt
+import pandas as pd
+import numpy as np
+
+import pandas as pd
+from sklearn.preprocessing import MinMaxScaler
+
+# Initialize MinMaxScaler
+scaler = MinMaxScaler()
+
+# Normalize the variances, RMSDs, and correlations
+variances = {
+    'swot_l3': variances_swot_l3,
+    'cmems_eur': variances_cmems_eur,
+    'cmems_glo': variances_cmems_glo,
+    'duacs_swot_l4': variances_duacs_swot_l4
+}
+
+rmsds = {
+    'swot_l3': rmsds_swot_l3,
+    'cmems_eur': rmsds_cmems_eur,
+    'cmems_glo': rmsds_cmems_glo,
+    'duacs_swot_l4': rmsds_duacs_swot_l4
+}
+
+correlations = {
+    'swot_l3': correlations_swot_l3,
+    'cmems_eur': correlations_cmems_eur,
+    'cmems_glo': correlations_cmems_glo,
+    'duacs_swot_l4': correlations_duacs_swot_l4
+}
+
+# Convert to DataFrames for scaling
+var_df = pd.DataFrame(variances)
+rmsd_df = pd.DataFrame(rmsds)
+corr_df = pd.DataFrame(correlations)
+
+# Normalize
+var_df_normalized = pd.DataFrame(scaler.fit_transform(var_df), columns=var_df.columns)
+rmsd_df_normalized = pd.DataFrame(scaler.fit_transform(rmsd_df), columns=rmsd_df.columns)
+corr_df_normalized = pd.DataFrame(scaler.fit_transform(corr_df), columns=corr_df.columns)
+
+# Definir los pesos para RMSD, Varianza y Correlación (ajusta estos valores según tus necesidades)
+alpha = 0.4  # Peso para RMSD
+beta = 0.4   # Peso para Varianza (inverso)
+gamma = 0.2  # Peso para Correlación
+
+# Invertir la varianza normalizada
+var_df_inverted = 1 / var_df_normalized
+
+# Calcular el Índice Combinado de Desempeño (ICD) incluyendo la correlación
+icd_df = alpha * rmsd_df_normalized + beta * var_df_inverted - gamma * corr_df_normalized
+
+# Opcional: Invertir el ICD para que un valor más bajo signifique un mejor desempeño (si es necesario)
+icd_df = 1 / icd_df
+
+# Opcional: Normalizar el ICD para que también esté en un rango entre 0 y 1
+scaler_icd = MinMaxScaler()
+icd_df_normalized = pd.DataFrame(scaler_icd.fit_transform(icd_df), columns=icd_df.columns)
+
+# Mostrar el DataFrame con los ICD normalizados
+print(icd_df_normalized)
+
+
+# Supongamos que icd_df_normalized, rmsd_df_normalized, var_df_normalized, y corr_df_normalized ya están disponibles
+
+# Calcular el ICD para el tamaño de los puntos
+icd_sizes = icd_df_normalized * 1000  # Escalar para que los puntos sean visibles
+
+# Crear un gráfico de dispersión con tamaños y colores diferenciados
+plt.figure(figsize=(12, 8))
+
+# Iterar sobre cada estación para añadir colores diferentes
+for i, station in enumerate(var_df_normalized.index):
+    plt.scatter(rmsd_df_normalized.iloc[i], var_df_normalized.iloc[i], 
+                s=icd_sizes.iloc[i], c=corr_df_normalized.iloc[i], cmap='viridis', 
+                label=station, alpha=0.6, edgecolor='k')
+
+# Añadir líneas de referencia en las medianas
+plt.axvline(rmsd_df_normalized.median().median(), color='grey', linestyle='--')
+plt.axhline(var_df_normalized.median().median(), color='grey', linestyle='--')
+
+# Etiquetas y título
+plt.xlabel('RMSD Normalizado')
+plt.ylabel('Varianza Normalizada')
+plt.title('Gráfico de Dispersión de RMSD vs Varianza Normalizada por Estación y Producto')
+
+# Añadir barra de color para la correlación
+cbar = plt.colorbar()
+cbar.set_label('Correlación Normalizada')
+
+# Leyenda y ajuste
+plt.legend(title='Estación', bbox_to_anchor=(1.05, 1), loc='upper left')
+plt.grid(True)
+
+# Mostrar el gráfico
+plt.show()
+
+import matplotlib.pyplot as plt
+import pandas as pd
+import numpy as np
+
+# Example DataFrame indices and sizes (adjust according to your actual data)
+# Suppose rmsd_df_normalized, var_df_normalized, and icd_sizes are already defined DataFrames
+
+# Crear un gráfico de dispersión con tamaños y colores diferenciados
+plt.figure(figsize=(12, 8))
+
+# Iterar sobre cada estación para añadir colores diferentes y números dentro de los círculos
+for i, station in enumerate(var_df_normalized.index):
+    for product in rmsd_df_normalized.columns:
+        x_value = rmsd_df_normalized.loc[station, product]
+        y_value = var_df_normalized.loc[station, product]
+        size_value = icd_sizes.loc[station, product]
+        label_text = str(i + 1)  # Station number
+        
+        plt.scatter(x_value, y_value, s=size_value, label=station, alpha=0.6, edgecolor='k')
+
+        # Añadir el número de la estación en el centro de cada círculo
+        plt.text(x_value, y_value, label_text, color='black', ha='center', va='center', fontsize=9, weight='bold')
+
+# Añadir líneas de referencia en las medianas
+plt.axvline(rmsd_df_normalized.median().median(), color='grey', linestyle='--')
+plt.axhline(var_df_normalized.median().median(), color='grey', linestyle='--')
+
+# Etiquetas y título
+plt.xlabel('RMSD Normalizado')
+plt.ylabel('Varianza Normalizada')
+plt.title('Gráfico de Dispersión de RMSD vs Varianza Normalizada por Estación y Producto')
+
+# Leyenda y ajuste
+plt.legend(title='Estación', bbox_to_anchor=(1.05, 1), loc='upper left')
+plt.grid(True)
+
+# Mostrar el gráfico
+plt.show()
+
+
+print(yerr_cmems_glo[1].mean() + yerr_cmems_glo[0].mean(), yerr_cmems_eur[1].mean() + yerr_cmems_eur[0].mean(), yerr_swot_l3[1].mean()+yerr_swot_l3[0].mean(), yerr_duacs_swot_l4[1].mean() + yerr_duacs_swot_l4[0].mean())
