@@ -94,7 +94,7 @@ def compute_combined_rmsd(rmsds, threshold):
 
 # Function to plot the time series of a tide gauge and a altimetry products
 def plot_time_series(alt_ts, tg_ts, rmsd, correlation, product_name, station, rad, plot_path):
-    plt.figure(figsize=(10, 6))
+    plt.figure(figsize=(8, 6))
     
     demean = 'demean_filtered'
     
@@ -104,27 +104,36 @@ def plot_time_series(alt_ts, tg_ts, rmsd, correlation, product_name, station, ra
     plt.plot(tg_ts['time'], tg_ts[demean], label='TGs', linewidth=3, color='g')
     plt.plot(tg_ts['time'], tg_ts['demean'], label='TGs unfiltered', linestyle='--', color='g', alpha=0.5)
     
-    plt.title(f'{sorted_names[station]}, {rad}km_radius, {day_window}dLoess, {product_name}')
-    plt.legend()
+    plt.title(f'{names_tg_short_sorted[station]}, {rad}km rad, {day_window}dLoess, {product_name}', fontsize=18)
+    plt.legend(fontsize=8, loc='upper left')
     plt.xticks(rotation=20)
     plt.yticks(np.arange(-15, 18, 3))
     plt.grid(True, alpha=0.2)
-    plt.ylabel('SSHA (cm)')
-    plt.tick_params(axis='both', which='major', labelsize=11)
+    plt.ylabel('SSHA (cm)', fontsize=12)
+
+    plt.tick_params(axis='both', which='major', labelsize=12)
     
-    plt.text(0.95, 0.1, f'RMSD: {rmsd:.2f} cm', fontsize=12, color='black', 
-             transform=plt.gca().transAxes, ha='right', bbox=dict(facecolor='white', alpha=0.5))
-    plt.text(0.95, 0.2, f'CORRELATION: {correlation:.2f}', fontsize=12, color='black', 
-             transform=plt.gca().transAxes, ha='right', bbox=dict(facecolor='white', alpha=0.5))
+    # Use LaTeX-like syntax to set cm^2 as superscript
+    plt.text(0.02, 0.80, f'RMSD: {rmsd:.2f} cm$^2$', fontsize=8, color='black', 
+             transform=plt.gca().transAxes, ha='left', bbox=dict(facecolor='white', alpha=0.2))
+    plt.text(0.02, 0.75, f'CORRELATION: {correlation:.2f}', fontsize=8, color='black', 
+             transform=plt.gca().transAxes, ha='left', bbox=dict(facecolor='white', alpha=0.2))
     
     plt.savefig(f'{plot_path}{sorted_names[station]}_{rad}km_{day_window}dLoess_{product_name}.png')
     plt.show()
+
 
 # Function to calculate the errors of combined RMSD values
 def bootstrap_rmsd(data, num_bootstrap=1000):
     bootstrap_samples = np.random.choice(data, (num_bootstrap, len(data)), replace=True)
     bootstrap_rmsd = np.mean(bootstrap_samples, axis=1)
     return bootstrap_rmsd
+
+names_tg_short_sorted = ['Porquerolles', 'La Capte', 'Les Oursinieres', 'Saint Louis Mourillon',
+                        'Toulon', 'Baie Du Lazaret', 'Port De St.Elme', 'Tamaris', 'Bregaillon',
+                        'Le_Brusc', 'La Ciotat', 'Cassis', 'Marseille', 'Port de la Redonne',
+                        'Port De Carro', 'Fos Sur Mer', 'Mahon', 'Porto Cristo',
+                        'Palma de Mallorca', 'Barcelona', 'Tarragona']
 
 
 # Path to the general SWOT data folder -----------------------------------------------------------------------------------
@@ -213,6 +222,22 @@ for i in range(lat_tg.size):  # Assuming lat_tg and lon_tg are 1D arrays with le
 
     # Extract the sorted names
     sorted_names = [name for name, _ in sorted_pairs]
+
+sorted_names_short = [
+    "Porquerolles",
+    "La Capte",
+    "Les Oursinieres",
+    "Saint Louis Mourillon",
+    "Port De St.Elme",
+    "Bregaillon",
+    "Le Brusc",
+    "La Ciotat",
+    "Port De La Redonne",
+    "Mahon",
+    "Palma de Mallorca",
+    "Barcelona",
+    "Tarragona"
+]
 
 
 # Setting the names_tg per longitude order from east to west
@@ -842,29 +867,27 @@ for rad in dmedia:
     bar_width = 1.5
     space_between_groups = 2  # Adjust this to set the space between groups
 
-# Create a new x array with extra space between groups
+    # Create a new x array with extra space between groups
     x = np.arange(num_stations) * (5 * bar_width + space_between_groups)
 
     # Plotting
     fig, ax = plt.subplots()
 
-    # ax.bar(x - 2 * bar_width, pivot_df_var['tg'], width=bar_width, label='TG', color="#9467bd")
-    # ax.bar(x - 1 * bar_width, pivot_df_var['table_all_swot_l3'], width=bar_width, label='SWOT L3', color = '#1f77b4')
-    # ax.bar(x - 0 * bar_width, pivot_df_var['table_all_duacs_swot_l4'], width=bar_width, label='DUACS_SWOT_L4', color = '#ff7f0e')    
-    # ax.bar(x + 1 * bar_width, pivot_df_var['table_all_cmems_glo'], width=bar_width, label='NRT_GLO', color = '#2ca02c')
-    # ax.bar(x + 2 * bar_width, pivot_df_var['table_all_cmems_eur'], width=bar_width, label='NRT_EUR', color = '#d62728')
-    
-    ax.bar(x - 3 * bar_width, pivot_df_var['table_all_swot_l3'], width=bar_width, label='SWOT L3', color='#1f77b4')
-    ax.bar(x - 2 * bar_width, pivot_df_var['table_all_duacs_swot_l4'], width=bar_width, label='DUACS_SWOT_L4', color='#ff7f0e')
-    ax.bar(x - 1 * bar_width, pivot_df_var['table_all_cmems_glo'], width=bar_width, label='NRT_GLO', color='#2ca02c')
-    ax.bar(x - 0 * bar_width, pivot_df_var['table_all_cmems_eur'], width=bar_width, label='NRT_EUR', color='#d62728')
-    ax.bar(x + 1 * bar_width, pivot_df_var['tg'], width=bar_width, label='TG', color="#9467bd")
-        # Add labels and title
-    ax.set_xlabel('Tide Gauges')
-    ax.set_ylabel('Variance (cm²)')
-    ax.set_title(f'Variance of altimetry products at {rad} km radius')
+    # Reorder the plotting sequence to put TG first
+    ax.bar(x - 3 * bar_width, pivot_df_var['tg'], width=bar_width, label='TG', color="#9467bd")  # TG first
+    ax.bar(x - 2 * bar_width, pivot_df_var['table_all_swot_l3'], width=bar_width, label='SWOT L3', color='#1f77b4')
+    ax.bar(x - 1 * bar_width, pivot_df_var['table_all_duacs_swot_l4'], width=bar_width, label='DUACS_SWOT_L4', color='#ff7f0e')
+    ax.bar(x - 0 * bar_width, pivot_df_var['table_all_cmems_glo'], width=bar_width, label='NRT_GLO', color='#2ca02c')
+    ax.bar(x + 1 * bar_width, pivot_df_var['table_all_cmems_eur'], width=bar_width, label='NRT_EUR', color='#d62728')
+
+    # Add labels and title
+    ax.set_xlabel('Stations', fontsize=12)
+    ax.set_ylabel('Variance (cm²)', fontsize=12)
+    ax.set_title(f'Variance of altimetry products at {rad} km radius', fontsize=14)
     ax.set_xticks(x)
-    ax.set_xticklabels(stations, rotation=90, fontsize='small')
+    ax.set_xticklabels(stations.index, fontsize=12)
+    ax.set_yticklabels(stations.index, fontsize=12)
+
     ax.legend(fontsize='small')
     ax.grid(True, which='both', axis='both', color='gray', linestyle='--', linewidth=0.5, alpha=0.5)
 
@@ -886,12 +909,15 @@ for rad in dmedia:
     ax.bar(x + 1.5 * bar_width, pivot_df_rmsd['table_all_cmems_eur'], width=bar_width, label='NRT_EUR')
     
     # Add labels and title
-    ax.set_xlabel('Tide Gauges')
-    ax.set_ylabel('RMSD (cm²)')
-    ax.set_title(f'RMSD of altimetry products at {rad} km radius')
+    ax.set_xlabel('Stations', fontsize=12)
+    ax.set_ylabel('RMSD (cm²)', fontsize=12)
+    ax.set_title(f'RMSD of altimetry products at {rad} km radius', fontsize=14)
     ax.set_xticks(x)
-    ax.set_xticklabels(stations, rotation=90, fontsize='small')
-    ax.legend(fontsize='small')
+    # ax.set_xticklabels(stations, rotation=90, fontsize='small')
+    ax.set_xticklabels(stations.index, fontsize=12)
+    ax.set_yticklabels(stations.index, fontsize=12)
+
+    ax.legend(fontsize=8)
     ax.grid(True, which='both', axis='both', color='gray', linestyle='--', linewidth=0.5, alpha=0.5)
 
     plt.show()
@@ -921,32 +947,45 @@ for rad in dmedia:
 
 
     # Set 'Station' as the index
-    improvement_df.set_index('Station', inplace=True)
+    # improvement_df.set_index('Station', inplace=True)
 
     # Plotting
-    fig, ax = plt.subplots(figsize=(14, 8))  # Adjust the figure size as needed
+    fig, ax = plt.subplots(figsize=(6, 6))  # Adjust the figure size as needed
 
     # Define bar width and positions
     bar_width = 0.2
     x = np.arange(len(improvement_df))
 
-    # Plot bars for each product
-    # ax.bar(x - bar_width, improvement_df['CMEMS EUR'], width=bar_width, label='CMEMS EUR')
-    ax.bar(x, improvement_df['SWOT L3'], width=bar_width, label='SWOT L3')
-    ax.bar(x + bar_width, improvement_df['DUACS SWOT L4'], width=bar_width, label='DUACS SWOT L4')
+    # Plot bars for each product and store the bar containers
+    bars_swot_l3 = ax.bar(x, improvement_df['SWOT L3'], width=bar_width, label='SWOT L3')
+    bars_duacs_swot_l4 = ax.bar(x + bar_width, improvement_df['DUACS SWOT L4'], width=bar_width, label='DUACS SWOT L4')
+
+    # Get the colors of the bars
+    color_swot_l3 = bars_swot_l3[0].get_facecolor()
+    color_duacs_swot_l4 = bars_duacs_swot_l4[0].get_facecolor()
 
     # Add labels and title
-    ax.set_xlabel('Stations')
-    ax.set_ylabel('Percentage Improvement (%)')
-    ax.set_title('Percentage Improvement of Products Compared to CMEMS NRT GLO')
+    ax.set_xlabel('Stations', fontsize=12)
+    ax.set_ylabel('Percentage Improvement (%)', fontsize=12)
+    ax.set_title('Improvement compared to CMEMS NRT GLO', fontsize=18)
     ax.set_xticks(x)
-    ax.set_xticklabels(improvement_df.index, rotation=90, fontsize='small')
-    ax.legend(fontsize='small')
+    ax.set_xticklabels(improvement_df.index, fontsize=12)
+
+    # Draw horizontal lines using the exact bar colors
+    plt.axhline(improvement_df['SWOT L3'].mean(), color=color_swot_l3, linestyle='--', zorder=0)
+    plt.axhline(improvement_df['DUACS SWOT L4'].mean(), color=color_duacs_swot_l4, linestyle='--', zorder=0)
+
+    # Set fontsize for x-ticks and y-ticks
+    plt.xticks(fontsize=12)
+    plt.yticks(fontsize=12)
+
+    ax.legend(fontsize=12)
     ax.grid(True, which='both', axis='y', color='gray', linestyle='--', linewidth=0.5, alpha=0.5)
 
     # Show the plot
     plt.tight_layout()
     plt.show()
+
     # Average RMSD values taking in account the non-linear behaviour of the RMSD
     # Delete the wrong rows/tgs from rmsds
     threshold = 10  # RMSD > 5 out
@@ -1046,7 +1085,7 @@ for rad in dmedia:
 
 results_df = pd.DataFrame(results_rad_comparison)
 
-results_df
+print(results_df)
 
 # results_df[['radius', 'rmsd_swot_l3', 'rmsd_cmems_eur', 'rmsd_cmems_glo', 'rmsd_duacs_swot_l4',
 #             'correlation_swot_l3', 'correlation_cmems_eur', 'correlation_cmems_glo', 'correlation_duacs_swot_l4' ]]
@@ -1139,17 +1178,17 @@ scaler = MinMaxScaler()
 
 # Normalize the variances and RMSDs
 variances = {
-    'swot_l3': variances_swot_l3,
-    'cmems_eur': variances_cmems_eur,
-    'cmems_glo': variances_cmems_glo,
-    'duacs_swot_l4': variances_duacs_swot_l4
+    'SWOT_L3': variances_swot_l3,
+    'CMEMS_NRT_EUR': variances_cmems_eur,
+    'CMEMS_NRT_GLO': variances_cmems_glo,
+    'DUACS_SWOT_L4': variances_duacs_swot_l4
 }
 
 rmsds = {
-    'swot_l3': rmsds_swot_l3,
-    'cmems_eur': rmsds_cmems_eur,
-    'cmems_glo': rmsds_cmems_glo,
-    'duacs_swot_l4': rmsds_duacs_swot_l4
+    'SWOT_L3': rmsds_swot_l3,
+    'CMEMS_NRT_EUR': rmsds_cmems_eur,
+    'CMEMS_NRT_GLO': rmsds_cmems_glo,
+    'DUACS_SWOT_L4': rmsds_duacs_swot_l4
 }
 
 # Convert to DataFrames for scaling
@@ -1385,9 +1424,6 @@ plt.grid(True)
 # Mostrar el gráfico
 plt.show()
 
-import matplotlib.pyplot as plt
-import pandas as pd
-import numpy as np
 
 # Example DataFrame indices and sizes (adjust according to your actual data)
 # Suppose rmsd_df_normalized, var_df_normalized, and icd_sizes are already defined DataFrames
@@ -1424,5 +1460,370 @@ plt.grid(True)
 # Mostrar el gráfico
 plt.show()
 
+# SCATTER PLOT DEL ICD PARA CADA PRODUCTO
+product_index = np.arange(0,3,1)
+
+for j in product_index:
+    # Create an empty list to store legend handles
+    legend_handles = []
+
+    plt.figure(figsize=(12, 8))
+
+    # Iterate over each station
+    for i, station in enumerate(var_df_normalized.index):
+        rmsd_value = float(rmsd_df_normalized.iloc[i, j])
+        var_value = float(var_df_normalized.iloc[i, j])
+        size_value = float(icd_sizes.iloc[i, j])
+
+        # Scatter plot with station number inside
+        scatter = plt.scatter(rmsd_value, var_value, 
+                            s=size_value, edgecolor='k', label=station)
+
+        # Add station number inside the circle
+        plt.text(rmsd_value, var_value, 
+                str(i), fontsize=8, ha='center', va='center', color='white')
+
+        # Append the handle for the legend with a fixed size marker
+        legend_handles.append(plt.Line2D([0], [0], marker='o', color='w', 
+                                        markerfacecolor=scatter.get_facecolor()[0], 
+                                        markeredgecolor='k', markersize=10, label=station))
+
+    # Add reference lines at the medians
+    plt.axvline(rmsd_df_normalized.iloc[:, j].median(), color='grey', linestyle='--')
+    plt.axhline(var_df_normalized.iloc[:, j].median(), color='grey', linestyle='--')
+
+    # Labels and title
+    plt.xlabel('RMSD Normalized')
+    plt.ylabel('Variance Normalized')
+    plt.title(f'Scatter Plot of Normalized RMSD vs Variance for Product {rmsd_df_normalized.columns[j]}')
+
+    # Customize the legend to have circles of the same size
+    plt.legend(handles=legend_handles, title='Station', bbox_to_anchor=(1.05, 1), loc='upper left')
+
+    plt.grid(True)
+
+    # Show the plot
+    plt.show()
 
 print(yerr_cmems_glo[1].mean() + yerr_cmems_glo[0].mean(), yerr_cmems_eur[1].mean() + yerr_cmems_eur[0].mean(), yerr_swot_l3[1].mean()+yerr_swot_l3[0].mean(), yerr_duacs_swot_l4[1].mean() + yerr_duacs_swot_l4[0].mean())
+
+
+
+
+# ALL STADISTICCS NORMALIZED TOGETHER FOR ALL THE STATIONS
+# Assuming variances, rmsds, and correlations dictionaries are already defined
+# Normalize the variances and RMSDs
+variances = {
+    'SWOT_L3': variances_swot_l3,
+    'CMEMS_NRT_EUR': variances_cmems_eur,
+    'CMEMS_NRT_GLO': variances_cmems_glo,
+    'DUACS_SWOT_L4': variances_duacs_swot_l4
+}
+
+rmsds = {
+    'SWOT_L3': rmsds_swot_l3,
+    'CMEMS_NRT_EUR': rmsds_cmems_eur,
+    'CMEMS_NRT_GLO': rmsds_cmems_glo,
+    'DUACS_SWOT_L4': rmsds_duacs_swot_l4
+}
+
+
+correlations = {
+    'swot_l3': correlations_swot_l3,
+    'cmems_eur': correlations_cmems_eur,
+    'cmems_glo': correlations_cmems_glo,
+    'duacs_swot_l4': correlations_duacs_swot_l4
+}
+
+# Convert to DataFrames for scaling
+var_df = pd.DataFrame(variances)
+rmsd_df = pd.DataFrame(rmsds)
+corr_df = pd.DataFrame(correlations)
+
+# Initialize MinMaxScaler
+scaler = MinMaxScaler()
+
+# Normalize across all columns (all products) together for each statistic
+var_df_normalized = pd.DataFrame(scaler.fit_transform(var_df.values.reshape(-1, 1)).reshape(var_df.shape),
+                                 columns=var_df.columns, index=var_df.index)
+
+rmsd_df_normalized = pd.DataFrame(scaler.fit_transform(rmsd_df.values.reshape(-1, 1)).reshape(rmsd_df.shape),
+                                  columns=rmsd_df.columns, index=rmsd_df.index)
+
+# Define weights for RMSD, Variance, and Correlation
+alpha = 0.5  # Weight for RMSD
+beta = 0.5   # Weight for Variance (inverted)
+
+# Invert the normalized variance
+var_df_inverted = 1 / var_df_normalized
+
+# Calculate the Combined Performance Index (ICD) including correlation
+icd_df = alpha * rmsd_df_normalized + beta * var_df_inverted 
+
+# Optional: Invert ICD to make lower values better (if needed)
+icd_df = 1 / icd_df
+
+# Optional: Normalize the ICD to a range between 0 and 1
+scaler_icd = MinMaxScaler()
+icd_df_normalized = pd.DataFrame(scaler_icd.fit_transform(icd_df), columns=icd_df.columns, index=icd_df.index)
+
+# Display the normalized ICD DataFrame
+print(icd_df_normalized)
+
+# Calculate ICD for point sizes
+icd_sizes = icd_df_normalized * 1000  # Scale for visibility
+
+# Create a scatter plot with differentiated sizes and colors
+plt.figure(figsize=(12, 8))
+
+# Iterate over each station to add different colors
+for i, station in enumerate(var_df_normalized.index):
+    plt.scatter(rmsd_df_normalized.iloc[i], var_df_normalized.iloc[i], 
+                s=icd_sizes.iloc[i], c=corr_df_normalized.iloc[i], cmap='viridis', 
+                label=station, alpha=0.6, edgecolor='k')
+
+# Add reference lines at the medians
+plt.axvline(rmsd_df_normalized.median().median(), color='grey', linestyle='--')
+plt.axhline(var_df_normalized.median().median(), color='grey', linestyle='--')
+
+# Labels and title
+plt.xlabel('Normalized RMSD')
+plt.ylabel('Normalized Variance')
+plt.title('Scatter Plot of RMSD vs Normalized Variance by Station and Product')
+
+# Add a colorbar for correlation
+cbar = plt.colorbar()
+cbar.set_label('Normalized Correlation')
+
+# Legend and adjustments
+plt.legend(title='Station', bbox_to_anchor=(1.05, 1), loc='upper left')
+plt.grid(True)
+
+# Show the plot
+plt.show()
+
+
+
+from sklearn.preprocessing import MinMaxScaler
+import pandas as pd
+import matplotlib.pyplot as plt
+import matplotlib.lines as mlines
+
+# Assuming variances, rmsds, and correlations dictionaries are already defined
+# Normalize the variances and RMSDs
+variances = {
+    'SWOT_L3': variances_swot_l3,
+    'CMEMS_NRT_EUR': variances_cmems_eur,
+    'CMEMS_NRT_GLO': variances_cmems_glo,
+    'DUACS_SWOT_L4': variances_duacs_swot_l4
+}
+
+rmsds = {
+    'SWOT_L3': rmsds_swot_l3,
+    'CMEMS_NRT_EUR': rmsds_cmems_eur,
+    'CMEMS_NRT_GLO': rmsds_cmems_glo,
+    'DUACS_SWOT_L4': rmsds_duacs_swot_l4
+}
+
+
+correlations = {
+    'swot_l3': correlations_swot_l3,
+    'cmems_eur': correlations_cmems_eur,
+    'cmems_glo': correlations_cmems_glo,
+    'duacs_swot_l4': correlations_duacs_swot_l4
+}
+
+# Convert to DataFrames for scaling
+var_df = pd.DataFrame(variances)
+rmsd_df = pd.DataFrame(rmsds)
+corr_df = pd.DataFrame(correlations)
+
+# Initialize MinMaxScaler
+scaler = MinMaxScaler()
+
+# Normalize across all columns (all products) together for each statistic
+var_df_normalized = pd.DataFrame(scaler.fit_transform(var_df.values.reshape(-1, 1)).reshape(var_df.shape),
+                                 columns=var_df.columns, index=var_df.index)
+
+rmsd_df_normalized = pd.DataFrame(scaler.fit_transform(rmsd_df.values.reshape(-1, 1)).reshape(rmsd_df.shape),
+                                  columns=rmsd_df.columns, index=rmsd_df.index)
+
+# Define weights for RMSD and Variance
+alpha = 0.5  # Weight for RMSD
+beta = 0.5   # Weight for Variance (inverted)
+
+# Invert the normalized variance
+var_df_inverted = 1 / var_df_normalized
+
+# Calculate the Combined Performance Index (ICD)
+icd_df = alpha * rmsd_df_normalized + beta * var_df_inverted 
+
+# Optional: Invert ICD to make lower values better (if needed)
+icd_df = 1 / icd_df
+
+# Optional: Normalize the ICD to a range between 0 and 1
+scaler_icd = MinMaxScaler()
+icd_df_normalized = pd.DataFrame(scaler_icd.fit_transform(icd_df), columns=icd_df.columns, index=icd_df.index)
+
+# Display the normalized ICD DataFrame
+print(icd_df_normalized)
+
+# Calculate ICD for point sizes
+icd_sizes = icd_df_normalized * 1000  # Scale for visibility
+
+# Create a scatter plot with colors representing different products
+plt.figure(figsize=(12, 8))
+
+# List of colors (one for each product)
+colors = plt.cm.tab10(range(len(icd_df_normalized.columns)))
+
+# Iterate over each product (column) to add different colors
+for i, product in enumerate(icd_df_normalized.columns):
+    for station_idx in range(len(icd_df_normalized.index)):
+        # Plot each station's point
+        plt.scatter(rmsd_df_normalized[product][station_idx], var_df_normalized[product][station_idx], 
+                    s=icd_sizes[product][station_idx], c=[colors[i]], label=product if station_idx == 0 else "", alpha=0.6, edgecolor='k')
+        
+        # Add station number at the center of each circle
+        plt.text(rmsd_df_normalized[product][station_idx], var_df_normalized[product][station_idx], 
+                 station_idx + 1, ha='center', va='center', fontsize=8, color='white')
+
+# Add reference lines at the medians
+plt.axvline(rmsd_df_normalized.median().median(), color='grey', linestyle='--')
+plt.axhline(var_df_normalized.median().median(), color='grey', linestyle='--')
+
+# Labels and title
+plt.xlabel('Normalized RMSD')
+plt.ylabel('Normalized Variance')
+plt.title('Scatter Plot of RMSD vs Normalized Variance by Product')
+
+# Create custom legend
+legend_elements = [mlines.Line2D([0], [0], marker='o', color='w', markerfacecolor=colors[i], markersize=10, 
+                                 label=product, markeredgecolor='k') for i, product in enumerate(icd_df_normalized.columns)]
+plt.legend(handles=legend_elements, title='Product', bbox_to_anchor=(1.05, 1), loc='upper left')
+
+plt.grid(True)
+
+# Show the plot
+plt.show()
+
+from sklearn.preprocessing import MinMaxScaler
+import pandas as pd
+import matplotlib.pyplot as plt
+
+# Assuming variances, rmsds, and correlations dictionaries are already defined
+# Normalize the variances and RMSDs
+variances = {
+    'SWOT_L3': variances_swot_l3,
+    'CMEMS_NRT_EUR': variances_cmems_eur,
+    'CMEMS_NRT_GLO': variances_cmems_glo,
+    'DUACS_SWOT_L4': variances_duacs_swot_l4
+}
+
+rmsds = {
+    'SWOT_L3': rmsds_swot_l3,
+    'CMEMS_NRT_EUR': rmsds_cmems_eur,
+    'CMEMS_NRT_GLO': rmsds_cmems_glo,
+    'DUACS_SWOT_L4': rmsds_duacs_swot_l4
+}
+
+correlations = {
+    'swot_l3': correlations_swot_l3,
+    'cmems_eur': correlations_cmems_eur,
+    'cmems_glo': correlations_cmems_glo,
+    'duacs_swot_l4': correlations_duacs_swot_l4
+}
+
+# Convert to DataFrames for scaling
+var_df = pd.DataFrame(variances)
+rmsd_df = pd.DataFrame(rmsds)
+corr_df = pd.DataFrame(correlations)
+
+# Initialize MinMaxScaler
+scaler = MinMaxScaler()
+
+# Normalize across all columns (all products) together for each statistic
+var_df_normalized = pd.DataFrame(scaler.fit_transform(var_df.values.reshape(-1, 1)).reshape(var_df.shape),
+                                 columns=var_df.columns, index=var_df.index)
+
+rmsd_df_normalized = pd.DataFrame(scaler.fit_transform(rmsd_df.values.reshape(-1, 1)).reshape(rmsd_df.shape),
+                                  columns=rmsd_df.columns, index=rmsd_df.index)
+
+# Define weights for RMSD and Variance
+alpha = 0.5  # Weight for RMSD
+beta = 0.5   # Weight for Variance (inverted)
+
+# Invert the normalized variance
+var_df_inverted = 1 / var_df_normalized
+
+# Calculate the Combined Performance Index (ICD)
+icd_df = alpha * rmsd_df_normalized + beta * var_df_inverted 
+
+# Optional: Invert ICD to make lower values better (if needed)
+icd_df = 1 / icd_df
+
+# Optional: Normalize the ICD to a range between 0 and 1
+scaler_icd = MinMaxScaler()
+icd_df_normalized = pd.DataFrame(scaler_icd.fit_transform(icd_df), columns=icd_df.columns, index=icd_df.index)
+
+# Display the normalized ICD DataFrame
+print(icd_df_normalized)
+
+# Calculate ICD for point sizes
+icd_sizes = icd_df_normalized * 1000  # Scale for visibility
+
+# Get default color cycle from Matplotlib
+color_cycle = plt.rcParams['axes.prop_cycle'].by_key()['color']
+
+# Map each product to a color from the default cycle
+product_colors = {
+    'SWOT_L3': color_cycle[0],
+    'DUACS_SWOT_L4': color_cycle[1],
+    'CMEMS_NRT_EUR': color_cycle[2],
+    'CMEMS_NRT_GLO': color_cycle[3]
+}
+
+
+
+# Create a scatter plot with colors representing different products
+plt.figure(figsize=(11, 7))
+
+# Iterate over each product (column) to add different colors
+for i, product in enumerate(icd_df_normalized.columns):
+    for station_idx in range(len(icd_df_normalized.index)):
+        # Plot each station's point with the specified color
+        plt.scatter(rmsd_df_normalized[product][station_idx], var_df_normalized[product][station_idx], 
+                    s=icd_sizes[product][station_idx], c=[product_colors[product]], 
+                    label=product if station_idx == 0 else "", alpha=0.6, edgecolor='k')
+        
+        # Add station number at the center of each circle
+        plt.text(rmsd_df_normalized[product][station_idx], var_df_normalized[product][station_idx], 
+                 station_idx, ha='center', va='center', fontsize=12, color='white')
+
+# Add reference lines at the means instead of medians
+plt.axvline(rmsd_df_normalized.median().median(), color='grey', linestyle='--')
+plt.axhline(var_df_normalized.median().median(), color='grey', linestyle='--')
+
+# Labels and title
+plt.xlabel('Normalized RMSD', fontsize=12)
+plt.ylabel('Normalized Variance', fontsize=12)
+plt.title('Combined Performance Index (RMSD vs Variance by Product)', fontsize=18)
+
+# Set fontsize for x-ticks and y-ticks
+plt.xticks(fontsize=12)
+plt.yticks(fontsize=12)
+
+# Create custom legend with scatter points to match plot circles
+scatter_legend = [plt.scatter([], [], s=100, color=product_colors[product], 
+                              alpha=0.6, edgecolor='k', label=product) 
+                  for product in icd_df_normalized.columns]
+
+# Position the legend within the figure
+plt.legend(handles=scatter_legend, title='PRODUCT', loc='upper right', fontsize=12, title_fontsize=12)
+
+plt.grid(True)
+
+# Show the plot
+plt.show()
+
+
