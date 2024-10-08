@@ -139,7 +139,6 @@ df_kiel['ssha_demean'] = df_kiel['ssha_dac']-df_kiel['ssha_dac'].mean()
 
 
 #  --------------------- READ SCHISM MODEL DATA ------------------------------------
-# --------- Define triangulation data
 mat_data = mat73.loadmat(f'{model_path}tri_simu.mat')
 tri = mat_data['tri'].astype(int) - 1
 
@@ -160,7 +159,7 @@ model_df_cut_kiel = model_df[(model_df['SCHISM_hgrid_node_y'] > 53.5) & (model_d
 # Calculate the distance from the target location to all points in the dataframe
 model_df_cut_kiel['distance'] = model_df_cut_kiel.apply(lambda row: haversine(lonTGs[0], latTGs[0], row['SCHISM_hgrid_node_x'], row['SCHISM_hgrid_node_y']), axis=1)
 
-# Filter the points within 20 km radius
+# Filter the points within 50 km radius
 radius = 50  # km
 df_filtered_kiel = model_df_cut_kiel[model_df_cut_kiel['distance'] <= radius]
 
@@ -649,5 +648,5 @@ fig.text(0.05, 0.20, time_swot3, va='center', ha='center', rotation=90, fontsize
 
 # Adjust layout for better spacing
 # plt.tight_layout()
-plt.subplots_adjust(left=0.1, right=0.95, top=0.95, bottom=0.05, wspace=0.02, hspace=-0.28)
+plt.subplots_adjust(left=0.1, right=0.95, top=0.95, bottom=0.05, wspace=0.05, hspace=-0.28)
 plt.show()
